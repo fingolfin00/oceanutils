@@ -307,15 +307,44 @@ def get_transport_timeseries (fn, start_date, end_date, lat0, latf, lon, dpds, r
         net = outflow + inflow
     return outflow, inflow, net
 
-def get_full_period (varname, fnd, start_date, end_date, restart_strformat):
-    print(list(fnd.keys())[0])
-    var = nc.Dataset(fnd[list(fnd.keys())[0]][0]).variables[varname][:,:,:,:]
-    for k,v in fnd.items():
-        if start_date.strftime(restart_strformat) not in k:
+def from_date_to_datetime (date_datefmt):
+    return datetime.datetime.combine(date_datefmt, datetime.datetime.min.time()) - datetime.timedelta(days=1)
+
+def from_date_to_idx (start_date, end_date, freq='6h'):
+    daterange = pd.date_range(start=start_date, end=end_date, freq=freq).to_pydatetime().tolist()
+    return daterange.index(daterange[-1]) 
+
+def get_full_period (varname, fnds, start_date, end_date, full_start_date, full_end_date, restart_freq='6h'):
+    full_restart_dates = pd.date_range(start=full_start_date, end=full_end_date, freq=restart_freq).to_pydatetime().tolist()
+    var = None
+    if start_date >= full_start_date and end_date <= full_end_date:
+        for k,v in fnds.items():
             print(k)
-            np.append(var, nc.Dataset(v[0]).variables[varname][:,:,:,:])
-            if end_date.strftime(restart_strformat) in k:
-                return var 
+            i = list(fnds.keys()).index(k)
+            if start_date <= from_date_to_datetime(full_restart_dates[i+1]):
+                var_start_idx = from_date_to_idx(full_restart_dates[i], start_date, freq=restart_freq) if start_date < from_date_to_datetime(full_restart_dates[i+1]) else None
+                # handle interval within a single ds
+                if end_date <= from_date_to_datetime(full_restart_dates[i+1]):
+                    var_end_idx = from_date_to_idx(full_restart_dates[i], end_date, freq=restart_freq)
+                    var = nc.Dataset(v[0]).variables[varname][var_start_idx:var_end_idx+1,:,:,:]
+                    return var
+                else:
+                    if var:
+                        if end_date <= from_date_to_datetime(full_restart_dates[i+1]):
+                            var_end_idx = from_date_to_idx(full_restart_dates[i], end_date, freq=restart_freq)
+                            np.append(var, nc.Dataset(v[0]).variables[varname][:var_end_idx+1,:,:,:])
+                            return var
+                        else:
+                            np.append(var, nc.Dataset(v[0]).variables[varname][:,:,:,:])
+                    else:
+                        # create first var
+                        var = nc.Dataset(v[0]).variables[varname][var_start_idx:,:,:,:]
+            else:
+                continue
+        return var
+    else:
+        print("Invalid interval")
+        return None
 
 def get_restart_strformat (restart_freq):
     if 'd' in restart_freq:
