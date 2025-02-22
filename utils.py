@@ -307,6 +307,21 @@ def get_transport_timeseries (fn, start_date, end_date, lat0, latf, lon, dpds, r
         net = outflow + inflow
     return outflow, inflow, net
 
+def get_full_period (varname, fnd, start_date, end_date, restart_strformat):
+    print(list(fnd.keys())[0])
+    var = nc.Dataset(fnd[list(fnd.keys())[0]][0]).variables[varname][:,:,:,:]
+    for k,v in fnd.items():
+        if start_date.strftime(restart_strformat) not in k:
+            print(k)
+            np.append(var, nc.Dataset(v[0]).variables[varname][:,:,:,:])
+            if end_date.strftime(restart_strformat) in k:
+                return var 
+
+def savez_data (data, data_str, start_date, end_date, restart_strformat, fld='./'):
+    fn = f"numpy_data-{start_date.strftime(restart_strformat)}_{end_date.strftime(restart_strformat)}-{data_str}.npy"
+    with open(f"{fld}{fn}", 'wb') as f:
+        np.savez(f"{fld}{fn}", data)
+
 def loadz_data (folder, arr_name='arr_0'):
     datad = {}
     fns = glob.glob(folder+"/*.npz")
