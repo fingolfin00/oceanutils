@@ -316,21 +316,23 @@ def from_date_to_idx (start_date, end_date, freq='6h'):
 
 def get_full_period (varname, fnds, start_date, end_date, full_start_date, full_end_date, restart_freq='6h'):
     full_restart_dates = pd.date_range(start=full_start_date, end=full_end_date, freq=restart_freq).to_pydatetime().tolist()
+    start_date = from_date_to_datetime(start_date)
+    end_date = from_date_to_datetime(end_date)
     var = None
     if start_date >= full_start_date and end_date <= full_end_date:
         for k,v in fnds.items():
             print(k)
             i = list(fnds.keys()).index(k)
-            if start_date <= from_date_to_datetime(full_restart_dates[i+1]):
+            if start_date <= full_restart_dates[i+1]:
                 var_start_idx = from_date_to_idx(full_restart_dates[i], start_date, freq=restart_freq) if start_date < from_date_to_datetime(full_restart_dates[i+1]) else None
                 # handle interval within a single ds
-                if end_date <= from_date_to_datetime(full_restart_dates[i+1]):
+                if end_date <= full_restart_dates[i+1]:
                     var_end_idx = from_date_to_idx(full_restart_dates[i], end_date, freq=restart_freq)
                     var = nc.Dataset(v[0]).variables[varname][var_start_idx:var_end_idx+1,:,:,:]
                     return var
                 else:
                     if var:
-                        if end_date <= from_date_to_datetime(full_restart_dates[i+1]):
+                        if end_date <= full_restart_dates[i+1]:
                             var_end_idx = from_date_to_idx(full_restart_dates[i], end_date, freq=restart_freq)
                             np.append(var, nc.Dataset(v[0]).variables[varname][:var_end_idx+1,:,:,:])
                             return var
