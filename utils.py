@@ -317,6 +317,51 @@ def get_full_period (varname, fnd, start_date, end_date, restart_strformat):
             if end_date.strftime(restart_strformat) in k:
                 return var 
 
+def get_restart_strformat (restart_freq):
+    if 'd' in restart_freq:
+        return "%Y%m%d"
+    elif 'm' in restart_freq: # untested
+        return "%Y%m"
+    else:
+        print(f"Restart freq {restart_freq} not supported")
+        return None
+
+def get_ncfiles (exp_name, start_date, end_date, workpath, recursive=False, datapoint_freq='6h', restart_freq='15d', save_freq='1m'):
+    # print(workpath)
+    glob_star = r'/**/' if recursive else r'*/*'
+    if save_freq=='1m':
+        save_strformat = "%Y%m"
+        save_delta = dateutil.relativedelta.relativedelta(months=+1)
+    else:
+        print(f"Not supported save freq format. {save_freq}")
+        return
+    grids = ["T", "U", "V", "W"]
+    restart_strformat = get_restart_strformat(restart_freq=restart_freq)
+    #restart_dates = [single_date for single_date in daterange(start_date, end_date, restart_days)]
+    restart_dates = pd.date_range(start=start_date, end=end_date, freq=restart_freq).to_pydatetime().tolist()
+    fn = {g: {} for g in grids}
+    for i in range(len(restart_dates[:-1])):
+        d_start = restart_dates[:-1][i]
+        d_end = restart_dates[1:][i] - datetime.timedelta(days=1)
+        # d_end = restart_dates[1:][i]
+        # dates = [f"{d.strftime(save_strformat)}-{(d+save_delta).strftime(save_strformat)}" for d in pd.date_range(start=d_start, end=d_end, freq=datapoint_freq).to_pydatetime().tolist()]
+        d_save = f"{d_start.strftime(save_strformat)}-{(d_start+save_delta).strftime(save_strformat)}"
+        d_restart = f"{d_start.strftime(restart_strformat)}_{d_end.strftime(restart_strformat)}"
+        # for d in dates:
+        for g in grids:
+            # search_str = f"{exp_name}_{datapoint_freq}_{d_start.strftime(restart_strformat)}_{d_end.strftime(restart_strformat)}_grid_{g}_{d_save}.nc"
+            search_str = f"{exp_name}_{datapoint_freq}_{d_restart}_grid_{g}_*.nc"
+            # print(search_str)
+            # fn[g][d_restart] = glob.glob(workpath+r"*/"+search_str)
+            fn[g][d_restart] = glob.glob(workpath+glob_star+search_str)
+    last_d_end = datetime.datetime.combine(end_date, datetime.datetime.min.time()) - datetime.timedelta(days=1)
+    if last_d_end > restart_dates[-1]:
+        last_restart = f"{restart_dates[-1].strftime(restart_strformat)}_{last_d_end.strftime(restart_strformat)}"
+        for g in grids:
+            last_search_str = f"{exp_name}_{datapoint_freq}_{last_restart}_grid_{g}_*.nc"
+            fn[g][last_restart] = glob.glob(workpath+glob_star+last_search_str)
+    return fn
+
 def savez_data (data, data_str, start_date, end_date, restart_strformat, fld='./'):
     fn = f"numpy_data-{start_date.strftime(restart_strformat)}_{end_date.strftime(restart_strformat)}-{data_str}.npy"
     with open(f"{fld}{fn}", 'wb') as f:
