@@ -47,7 +47,13 @@ def plot_lonlat (ds, var, var_name, level, adjust_plt=False, vmin=None, vmax=Non
 
     plt.show()
 
-def plot_2d (ds, var, var_name, method='pcolor', contourf_levs=10, contour_step_level=100, contour_facecolor='grey', contour_lev_col=None, contour_zero_lev_label=False, adjust_plt=False, vmin=None, vmax=None, zoom_idx=((None,None), (None,None)), zoom_coords=((None,None), (None,None)), add_zoomstr_title=False, cbar=True, cbar_ticks_num=10, cbar_loc='right', cbar_title='', cmap='jet', cmap_zerocentered='bwr', mask=None, points_idx=[(None,None)], points_coords=[(None,None)], points_clr=['ko'], points_coords_ann=[None], points_idx_ann=[None], points_coords_ann_opts=[None], points_idx_ann_opts=[None]):
+def plot_2d (ds, var, var_name, savefig_fn=None, savefig_resfac=1, hres=24, vres=12, method='pcolor',
+             contourf_levs=10, contour_step_level=100, contour_facecolor='grey', contour_lev_col=None, contour_zero_lev_label=False,
+             adjust_plt=False, vmin=None, vmax=None,
+             zoom_idx=((None,None), (None,None)), zoom_coords=((None,None), (None,None)), add_zoomstr_title=False,
+             cbar=True, cbar_ticks_num=10, cbar_loc='right', cbar_title='', cmap='jet', cmap_zerocentered='bwr', mask=None,
+             points_idx=[(None,None)], points_coords=[(None,None)], points_clr=['ko'], points_coords_ann=[None], points_idx_ann=[None], points_coords_ann_opts=[None], points_idx_ann_opts=[None]):
+    
     lat0_i, latf_i = ou.get_idx_from_lat(zoom_coords[0][0], ds) if zoom_coords[0][0] else zoom_idx[0][0], ou.get_idx_from_lat(zoom_coords[0][1], ds) if zoom_coords[0][1] else zoom_idx[0][1]
     lon0_i, lonf_i = ou.get_idx_from_lon(zoom_coords[1][0], ds) if zoom_coords[1][0] else zoom_idx[1][0], ou.get_idx_from_lon(zoom_coords[1][1], ds) if zoom_coords[1][1] else zoom_idx[1][1]
     var_plt = var[lat0_i:latf_i,lon0_i:lonf_i]*mask[lat0_i:latf_i,lon0_i:lonf_i] if mask is not None else var[lat0_i:latf_i,lon0_i:lonf_i]
@@ -65,7 +71,7 @@ def plot_2d (ds, var, var_name, method='pcolor', contourf_levs=10, contour_step_
     print(f"vmin, vcenter, vmax = ({vmin_plt:.3f}, {vcenter_plt:.3f}, {vmax_plt:.3f})")
 
     fig, ax = plt.subplots(1,1)
-    fig.set_size_inches(24,12)
+    fig.set_size_inches(hres,vres)
 
     match method:
         case 'pcolor':
@@ -151,7 +157,10 @@ def plot_2d (ds, var, var_name, method='pcolor', contourf_levs=10, contour_step_
         zoom_str = ""
     ax.set_title(f"{var_name}{zoom_str}")
 
-    plt.show()
+    if savefig_fn:
+        plt.savefig(savefig_fn, dpi=savefig_resfac*hres*vres, bbox_inches='tight')
+    else:
+        plt.show()
 
 def plot_lonlev (ds, var, var_name, lat_i, lev_factor=1, adjust_plt=False, vmin=None, vmax=None, zoom_idx=((None,None), (None,None)), zoom_coords=((None,None), (None,None)), cbar_ticks_num=10, cmap='jet', cmap_zerocentered='bwr', mask=None, point_idx=(None,None), point_coords=(None,None), point_clr='ko'):
     lev0_i, levf_i = ou.get_idx_from_lev(zoom_coords[0][0], ds) if zoom_coords[0][0] else zoom_idx[0][0], ou.get_idx_from_lev(zoom_coords[0][1], ds) if zoom_coords[0][1] else zoom_idx[0][1]
