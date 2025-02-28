@@ -12,7 +12,7 @@ def get_coord_name (ds, keys):
     return next((k for k in ds.dimensions.keys() if k in keys), None)
 
 def get_lev_coord_key (ds):
-    lev_strings = set(["deptht", "elevation", "bathymetry", "nav_lev"])
+    lev_strings = set(["deptht", "depthu", "depthv", "depthw", "elevation", "bathy_metry", "bathymetry", "nav_lev"])
     return get_coord_name(ds, lev_strings)
 
 def get_lon_coord_key (ds):
@@ -27,7 +27,7 @@ def get_var_name (ds, keys):
     return next((k for k in ds.variables.keys() if k in keys), None)
 
 def get_lev_var_key (ds):
-    lev_strings = set(["deptht", "nav_lev", "bathymetry"])
+    lev_strings = set(["deptht", "depthu", "depthv", "depthw", "elevation", "nav_lev", "bathy_metry", "bathymetry"])
     return get_var_name(ds, lev_strings)
 
 def get_lon_var_key (ds):
@@ -41,26 +41,41 @@ def get_lat_var_key (ds):
 def create_latspace (ds):
     lat_key = get_lat_var_key(ds)
     if len(np.shape(ds.variables[lat_key])) == 2:
-        return np.linspace(ds.variables[lat_key][0,0], ds.variables[lat_key][-1,0], np.shape(ds.variables[lat_key])[0])
+        # print(2)
+        # print(ds.variables[lat_key][:,0])
+        # return np.linspace(ds.variables[lat_key][0,0], ds.variables[lat_key][-1,0], np.shape(ds.variables[lat_key])[0])
+        return ds.variables[lat_key][:,0]
     elif len(np.shape(ds.variables[lat_key])) == 1:
-        return np.linspace(ds.variables[lat_key][0], ds.variables[lat_key][-1], np.shape(ds.variables[lat_key])[0])
+        # print(1)
+        # print(ds.variables[lat_key][:])
+        # return np.linspace(ds.variables[lat_key][0], ds.variables[lat_key][-1], np.shape(ds.variables[lat_key])[0])
+        return ds.variables[lat_key][:]
     else:
         print("Lat format not supported.")
         return None
 
 def create_lonspace (ds):
     lon_key = get_lon_var_key(ds)
+    # print(lon_key)
     if len(np.shape(ds.variables[lon_key])) == 2:
-        return np.linspace(ds.variables[lon_key][0,0], ds.variables[lon_key][0,-1], np.shape(ds.variables[lon_key])[1])
+        # print(2)
+        # print(ds.variables[lon_key][40,:])
+        # return np.linspace(ds.variables[lon_key][0,0], ds.variables[lon_key][0,-1], np.shape(ds.variables[lon_key])[1])
+        return ds.variables[lon_key][40,:]
     elif len(np.shape(ds.variables[lon_key])) == 1:
-        return np.linspace(ds.variables[lon_key][0], ds.variables[lon_key][-1], np.shape(ds.variables[lon_key])[0])
+        # print(1)
+        # print(ds.variables[lon_key][:])
+        # return np.linspace(ds.variables[lon_key][0], ds.variables[lon_key][-1], np.shape(ds.variables[lon_key])[0])
+        return ds.variables[lon_key][:]
     else:
         print("Lon format not supported.")
         return None
 
 def create_levspace (ds):
-    lev_key = get_lev_var_key(ds)   
-    return np.linspace(ds.variables[lev_key][0], ds.variables[lev_key][-1], np.shape(ds.variables[lev_key])[0])
+    lev_key = get_lev_var_key(ds)
+    # variables['nav_lev'][:]
+    # return np.linspace(ds.variables[lev_key][0], ds.variables[lev_key][-1], np.shape(ds.variables[lev_key])[0])
+    return ds.variables[lev_key][:]
 
 def get_lev_from_idx (lev_i, ds):
     return create_levspace(ds)[lev_i]
@@ -72,7 +87,7 @@ def get_lat_from_idx (lat_i, ds):
     return create_latspace(ds)[lat_i]
 
 def get_idx_from_lev (lev, ds):
-    return (np.abs(create_latspace(ds) - lev)).argmin()
+    return (np.abs(create_levspace(ds) - lev)).argmin()
 
 def get_idx_from_lat (lat, ds):
     return (np.abs(create_latspace(ds) - lat)).argmin()
@@ -97,6 +112,9 @@ def get_parent_lev_idx_from_child (pds, cds):
     clev_s = create_levspace(cds)
     clev0, clevf = clev_s[0], clev_s[-1]
     return get_idx_from_lev(clev0, pds), get_idx_from_lev(clevf, pds)
+
+def get_child_coords (dcads, nghost=0):
+    return ((create_levspace(dcads)[0],create_levspace(dcads)[-1]),(create_latspace(dcads)[nghost],create_latspace(dcads)[-1-nghost]),(create_lonspace(dcads)[nghost],create_lonspace(dcads)[-1-nghost]))
 
 def gen_ic_ds (ds_init, var_d, filename):
     with nc.Dataset(filename, "w", format="NETCDF4") as ds:
@@ -200,6 +218,9 @@ def potdensity (vot, vos, pres):
 def grad_dz (field):
     return np.append(np.diff(field, 1, axis=0), [np.zeros(np.shape(field)[1:])], axis=0) # last level all zeros to keep dimensions consistent
 
+def grad (field, axis):
+    return np.append(np.diff(field, 1, axis=axis), [np.zeros(np.shape(field)[1:])], axis=axis) # last level all zeros to keep dimensions consistent
+
 def move_down_neg_potdensity (vot, vos, potd, dpotd_bool, pres, mask):
     # solo nella T al k+1 meno un decimo di grado, reiterare fino a che non ho più diff densità pot sotto zero
     # se il problema peggiora aggiungere un centesimo di PSU nella salinità
@@ -219,26 +240,17 @@ def move_down_neg_potdensity (vot, vos, potd, dpotd_bool, pres, mask):
 
     return vot_filtered, vos_filtered, potd_filtered, dpotd_dz
 
-def get_zonal_outflow (u, e2u, e3u, units='sverdrup'):
-    mask = u<0
-    doutflow = u*e2u*e3u*mask
-    if units == 'sverdrup':
-        outflow = np.sum(doutflow, axis=(1,2,3))/10**6
-    else:
-        outflow = np.sum(doutflow, axis=(1,2,3))
-    return outflow
-
-def get_zonal_inflow (u, e2u, e3u, units='sverdrup'):
-    mask = u>0
-    dinflow = u*e2u*e3u*mask
-    if units == 'sverdrup':
-        inflow = np.sum(dinflow, axis=(1,2,3))/10**6
-    else:
-        inflow = np.sum(dinflow, axis=(1,2,3))
-    return inflow
+def rolling_mean_paolo (field, window):
+    out = np.ma.array([])
+    for n in np.arange(np.shape(field)[0]):
+        idx1 = np.max([0, n-int(window/2)])
+        idx2 = np.min([np.shape(field)[0], n+int(window/2)])
+        
+        out = np.ma.append(out, np.ma.mean(field[idx1:idx2], axis=0))
+    return out.reshape(np.shape(field))
 
 def rolling_mean (field, window):
-    return np.convolve(np.ravel(np.array(field)), np.ones(window)/window, mode='valid')
+    return np.convolve(np.ravel(np.array(field)), np.ones(window)/window, mode='same')
 
 def get_restart_strformat (restart_freq):
     if 'd' in restart_freq:
@@ -279,74 +291,254 @@ def get_ncfiles (exp_name, start_date, end_date, workpath, recursive=False, data
             fn[g][d_restart] = glob.glob(workpath+glob_star+search_str)
     return fn
 
-def get_transport_timeseries (fn, start_date, end_date, lat0, latf, lon, dpds, restart_freq='15d'):
-    grid = 'U'
-    restart_strformat = get_restart_strformat(restart_freq=restart_freq)
-    restart_dates = pd.date_range(start=start_date, end=end_date, freq=restart_freq).to_pydatetime().tolist()
-    restart_str = [f"{restart_dates[:-1][i].strftime(restart_strformat)}_{(restart_dates[1:][i] - datetime.timedelta(days=1)).strftime(restart_strformat)}" for i in range(len(restart_dates[:-1]))]
-    print(restart_str)
-    lat0_i, latf_i = get_idx_from_lat(lat0,dpds), get_idx_from_lat(latf,dpds)
-    lon0_i, lonf_i = get_idx_from_lon(lon,dpds), get_idx_from_lon(lon,dpds)+1
-    outflow, inflow = np.array([]), np.array([])
-    for s in restart_str:
-        print(s)
-        upfn = os.path.abspath(fn[grid][s][0])
-        upds = nc.Dataset(fn[grid][s][0])
-        # print(upds.variables)
-        # print(lat0_i, latf_i)
-        # print(lon0_i, lonf_i)
-        # print("get u")
-        u = upds.variables['vozocrtx'][:,:,lat0_i:latf_i,lon0_i:lonf_i]
-        # print(np.shape(u))
-        e2u = np.repeat([np.repeat([dpds.variables['e2u'][0,lat0_i:latf_i,lon0_i:lonf_i]], len(create_levspace(dpds)), axis=0)], np.shape(u)[0], axis=0)
-        e3u = np.repeat([dpds.variables['e3u_0'][0,:,lat0_i:latf_i,lon0_i:lonf_i]], np.shape(u)[0], axis=0)
-        # print("Calc outflow")
-        outflow = np.append(outflow, get_zonal_outflow(u, e2u, e3u))
-        # print("Calc inflow")
-        inflow = np.append(inflow, get_zonal_inflow(u, e2u, e3u))
-        net = outflow + inflow
-    return outflow, inflow, net
+def get_scale_factor (domds, grid, var, zoom_coords=((None,None),(None,None),(None,None))): # lev, lat, lon
+    lev0_i, levf_i = get_idx_from_lev(zoom_coords[0][0], domds) if zoom_coords[0][0] else None, get_idx_from_lev(zoom_coords[0][1], domds) if zoom_coords[0][1] else None
+    lat0_i, latf_i = get_idx_from_lat(zoom_coords[1][0], domds) if zoom_coords[1][0] else None, get_idx_from_lat(zoom_coords[1][1], domds) if zoom_coords[1][1] else None
+    lon0_i, lonf_i = get_idx_from_lon(zoom_coords[2][0], domds) if zoom_coords[2][0] else None, get_idx_from_lon(zoom_coords[2][1], domds) if zoom_coords[2][1] else None
+    # print(lev0_i, levf_i, lat0_i, latf_i, lon0_i, lonf_i)
+    e1 = np.repeat([np.repeat([domds.variables['e1'+grid.lower()][0,lat0_i:latf_i,lon0_i:lonf_i]], len(create_levspace(domds)[lev0_i:levf_i]), axis=0)], np.shape(var)[0], axis=0)
+    e2 = np.repeat([np.repeat([domds.variables['e2'+grid.lower()][0,lat0_i:latf_i,lon0_i:lonf_i]], len(create_levspace(domds)[lev0_i:levf_i]), axis=0)], np.shape(var)[0], axis=0)
+    e3 = np.repeat([domds.variables['e3'+grid.lower()+'_0'][0,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i]], np.shape(var)[0], axis=0)
+    return e1, e2, e3
+
+def get_var_from_ds (varname, ds, domds, grid, zoom_coords=((None,None),(None,None),(None,None))): # lev, lat, lon
+    lev0_i, levf_i = get_idx_from_lev(zoom_coords[0][0], domds) if zoom_coords[0][0] else None, get_idx_from_lev(zoom_coords[0][1], domds) if zoom_coords[0][1] else None
+    lat0_i, latf_i = get_idx_from_lat(zoom_coords[1][0], domds) if zoom_coords[1][0] else None, get_idx_from_lat(zoom_coords[1][1], domds) if zoom_coords[1][1] else None
+    lon0_i, lonf_i = get_idx_from_lon(zoom_coords[2][0], domds) if zoom_coords[2][0] else None, get_idx_from_lon(zoom_coords[2][1], domds) if zoom_coords[2][1] else None
+    # print(lev0_i, levf_i, lat0_i, latf_i, lon0_i, lonf_i)
+    var = ds.variables[varname][:,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i]
+    return var
+
+def get_ke (u, v):
+    return (u**2 + v**2)
+
+def get_ke_3dspatial_mean (u, v, e1u, e2u, e3u, e1v, e2v, e3v):
+    us = np.ma.sum(0.5*np.ma.power(u,2)*e1u*e2u*e3u, axis=(1,2,3)) / np.ma.sum(e1u*e2u*e3u, axis=(1,2,3))
+    vs = np.ma.sum(0.5*np.ma.power(v,2)*e1v*e2v*e3v, axis=(1,2,3)) / np.ma.sum(e1v*e2v*e3v, axis=(1,2,3))
+    return us+vs
+
+def get_ke_2dspatial_mean (u, v, e1u, e2u, e1v, e2v):
+    us = np.ma.sum(0.5*np.ma.power(u,2)*e1u*e2u, axis=(2,3)) / np.ma.sum(e1u*e2u, axis=(2,3))
+    vs = np.ma.sum(0.5*np.ma.power(v,2)*e1v*e2v, axis=(2,3)) / np.ma.sum(e1v*e2v, axis=(2,3))
+    return us+vs 
+
+def get_zonal_outflow (u, e2u, e3u, units='sverdrup'):
+    mask = u<0
+    doutflow = u*e2u*e3u*mask
+    if units == 'sverdrup':
+        outflow = np.ma.sum(doutflow, axis=(1,2,3))/10**6
+    else:
+        outflow = np.ma.sum(doutflow, axis=(1,2,3))
+    # print(outflow)
+    return outflow
+
+def get_zonal_inflow (u, e2u, e3u, units='sverdrup'):
+    mask = u>0
+    dinflow = u*e2u*e3u*mask
+    if units == 'sverdrup':
+        inflow = np.ma.sum(dinflow, axis=(1,2,3))/10**6
+    else:
+        inflow = np.ma.sum(dinflow, axis=(1,2,3))
+    return inflow
+
+def get_zonal_inflow_tracer (u, tracer, e2t, e3t):
+    mask = u>0
+    return np.ma.sum(tracer*e2t*e3t*mask, axis=(1,2,3)) / np.ma.sum(e2t*e3t*mask, axis=(1,2,3))
+
+def get_zonal_outlow_tracer (u, tracer, e2t, e3t):
+    mask = u<0
+    return np.ma.sum(tracer*e2t*e3t*mask, axis=(1,2,3)) / np.ma.sum(e2t*e3t*mask, axis=(1,2,3))
+
+def get_interface (u, domds, interface_minlev=400):
+    mean_profile = np.ma.masked_equal(u[:,:,:,:],0).mean(axis=(2,3))
+    interface = np.array([])
+    z = create_levspace(domds)[0:get_idx_from_lev(interface_minlev, domds)]
+    for i in range(np.shape(mean_profile[:,0:get_idx_from_lev(interface_minlev, domds)])[0]):
+        interface = np.ma.append(interface, z[get_idx_in_arr(0,mean_profile[i,0:get_idx_from_lev(interface_minlev, domds)])])
+    return mean_profile, interface
+
+def get_full_interface (fnds, domds, start_date, end_date, full_start_date, full_end_date,
+                   lat0, latf, lon, restart_freq='15d', interface_minlev=400):
+    
+    lat0_i, latf_i = get_idx_from_lat(lat0,domds), get_idx_from_lat(latf,domds)
+    lon0_i, lonf_i = get_idx_from_lon(lon,domds), get_idx_from_lon(lon,domds)+1
+    lon0, lonf = get_lon_from_idx(lon0_i,domds), get_lon_from_idx(lonf_i,domds)
+    # print(lat0_i, latf_i, lon0_i, lonf_i)
+    zoom_coords = ((None,None),(lat0, latf),(lon0, lonf))
+
+    u = get_full_period ('vozocrtx', fnds['U'], domds, start_date, end_date, full_start_date, full_end_date,
+                         zoom_coords=zoom_coords) # lev, lat, lon
+    _, e2u, e3u = get_scale_factor(domds, 'U', u, zoom_coords=zoom_coords)
+    return get_interface(u, domds, interface_minlev=interface_minlev)
+
+def get_full_tracer_flow (fnds, domds, start_date, end_date, full_start_date, full_end_date,
+                   lat0, latf, lon, restart_freq='15d'):
+    lat0_i, latf_i = get_idx_from_lat(lat0,domds), get_idx_from_lat(latf,domds)
+    lon0_i, lonf_i = get_idx_from_lon(lon,domds), get_idx_from_lon(lon,domds)+1
+    lon0, lonf = get_lon_from_idx(lon0_i,domds), get_lon_from_idx(lonf_i,domds)
+    # print(lat0_i, latf_i, lon0_i, lonf_i)
+    zoom_coords = ((None,None),(lat0, latf),(lon0, lonf))
+
+    T = get_full_period ('votemper', fnds['T'], domds, start_date, end_date, full_start_date, full_end_date,
+                     zoom_coords=zoom_coords) # lev, lat, lon
+    S = get_full_period ('vosaline', fnds['T'], domds, start_date, end_date, full_start_date, full_end_date,
+                     zoom_coords=zoom_coords)
+    _, e2t, e3t = get_scale_factor(domds, 'T', u, zoom_coords=zoom_coords)
+
+    zonalinT = get_zonal_inflow_tracer(u, T, e2t, e3t)
+    zonalinS = get_zonal_inflow_tracer(u, S, e2t, e3t)
+    zonaloutT = get_zonal_outlow_tracer(u, T, e2t, e3t)
+    zonaloutS = get_zonal_outlow_tracer(u, S, e2t, e3t)
+
+    return zonalinT, zonalinS, zonaloutT, zonaloutS
+
+def get_zonal_metrics (fnds, domds, start_date, end_date, full_start_date, full_end_date,
+                       lat0, latf, lon, restart_freq='15d', interface_minlev=400):
+    
+    lat0_i, latf_i = get_idx_from_lat(lat0,domds), get_idx_from_lat(latf,domds)
+    lon0_i, lonf_i = get_idx_from_lon(lon,domds), get_idx_from_lon(lon,domds)+1
+    lon0, lonf = get_lon_from_idx(lon0_i,domds), get_lon_from_idx(lonf_i,domds)
+    # print(lat0_i, latf_i, lon0_i, lonf_i)
+    zoom_coords = ((None,None),(lat0, latf),(lon0, lonf))
+
+    u = get_full_period ('vozocrtx', fnds['U'], domds, start_date, end_date, full_start_date, full_end_date,
+                     zoom_coords=zoom_coords) # lev, lat, lon
+    _, e2u, e3u = get_scale_factor(domds, 'U', u, zoom_coords=zoom_coords)
+    
+    T = get_full_period ('votemper', fnds['T'], domds, start_date, end_date, full_start_date, full_end_date,
+                     zoom_coords=zoom_coords) # lev, lat, lon
+    S = get_full_period ('vosaline', fnds['T'], domds, start_date, end_date, full_start_date, full_end_date,
+                     zoom_coords=zoom_coords)
+    _, e2t, e3t = get_scale_factor(domds, 'T', u, zoom_coords=zoom_coords)
+    
+    outflow = get_zonal_outflow(u, e2u, e3u)
+    inflow = get_zonal_inflow(u, e2u, e3u)
+    netflow = outflow + inflow
+
+    zonalinT = get_zonal_inflow_tracer(u, T, e2t, e3t)
+    zonalinS = get_zonal_inflow_tracer(u, S, e2t, e3t)
+    zonaloutT = get_zonal_outlow_tracer(u, T, e2t, e3t)
+    zonaloutS = get_zonal_outlow_tracer(u, S, e2t, e3t)
+
+    mean_profile, interface = get_interface(u, domds, interface_minlev=interface_minlev)
+    
+    return {'outflow': outflow, 'inflow': inflow, 'netflow': netflow,
+            'zonalinT': zonalinT, 'zonalinS': zonalinS, 'zonaloutT': zonaloutT, 'zonaloutS': zonaloutS, 
+            'interface': interface, 'mean_profile': mean_profile}
 
 def from_date_to_datetime (date_datefmt):
-    return datetime.datetime.combine(date_datefmt, datetime.datetime.min.time()) - datetime.timedelta(days=1)
+    return datetime.datetime.combine(date_datefmt, datetime.datetime.min.time())
 
 def from_date_to_idx (start_date, end_date, freq='6h'):
+    # print(start_date, end_date)
     daterange = pd.date_range(start=start_date, end=end_date, freq=freq).to_pydatetime().tolist()
+    # print(daterange)
     return daterange.index(daterange[-1]) 
 
-def get_full_period (varname, fnds, start_date, end_date, full_start_date, full_end_date, restart_freq='6h'):
+def get_full_period (varname, fnds, domds,
+                     start_date, end_date, full_start_date, full_end_date,
+                     vardim='3d', restart_freq='15d', save_freq='6h',
+                     zoom_coords=((None,None),(None,None),(None,None))): # lev, lat, lon
     full_restart_dates = pd.date_range(start=full_start_date, end=full_end_date, freq=restart_freq).to_pydatetime().tolist()
-    start_date = from_date_to_datetime(start_date)
-    end_date = from_date_to_datetime(end_date)
+    start_date, end_date = from_date_to_datetime(start_date), from_date_to_datetime(end_date)
+    full_start_date, full_end_date = from_date_to_datetime(full_start_date), from_date_to_datetime(full_end_date)
+    if full_end_date > full_restart_dates[-1]:
+        full_restart_dates.append(full_end_date+datetime.timedelta(days=1))
+    lev0_i, levf_i = get_idx_from_lev(zoom_coords[0][0], domds) if zoom_coords[0][0] else None, get_idx_from_lev(zoom_coords[0][1], domds) if zoom_coords[0][1] else None
+    lat0_i, latf_i = get_idx_from_lat(zoom_coords[1][0], domds) if zoom_coords[1][0] else None, get_idx_from_lat(zoom_coords[1][1], domds) if zoom_coords[1][1] else None
+    lon0_i, lonf_i = get_idx_from_lon(zoom_coords[2][0], domds) if zoom_coords[2][0] else None, get_idx_from_lon(zoom_coords[2][1], domds) if zoom_coords[2][1] else None
+    print(f"Load {varname} in ", lev0_i, levf_i, lat0_i, latf_i, lon0_i, lonf_i)
+    # print(full_restart_dates)
+    # print(list(fnds.keys()))
     var = None
-    if start_date >= full_start_date and end_date <= full_end_date:
+    if start_date >= full_start_date or end_date <= full_end_date or start_date < end_date:
         for k,v in fnds.items():
-            print(k)
-            i = list(fnds.keys()).index(k)
-            if start_date <= full_restart_dates[i+1]:
-                var_start_idx = from_date_to_idx(full_restart_dates[i], start_date, freq=restart_freq) if start_date < from_date_to_datetime(full_restart_dates[i+1]) else None
-                # handle interval within a single ds
-                if end_date <= full_restart_dates[i+1]:
-                    var_end_idx = from_date_to_idx(full_restart_dates[i], end_date, freq=restart_freq)
-                    var = nc.Dataset(v[0]).variables[varname][var_start_idx:var_end_idx+1,:,:,:]
-                    return var
-                else:
-                    if var:
-                        if end_date <= full_restart_dates[i+1]:
-                            var_end_idx = from_date_to_idx(full_restart_dates[i], end_date, freq=restart_freq)
-                            np.append(var, nc.Dataset(v[0]).variables[varname][:var_end_idx+1,:,:,:])
-                            return var
+            i = list(fnds.keys()).index(k)+1
+            # print(k, i, v, full_restart_dates[i])
+            if start_date <= full_restart_dates[i]:
+                # print(k, full_restart_dates[i])
+                # print(v[0])
+                ds = nc.Dataset(v[0])
+                # print(lev0_i, levf_i, lat0_i, latf_i, lon0_i, lonf_i)
+                # print(zoom_coords[2][0], zoom_coords[2][1])
+                if var is not None:
+                    if end_date <= full_restart_dates[i]:
+                        # print(full_restart_dates[i-1], end_date)
+                        var_end_idx = from_date_to_idx(full_restart_dates[i-1], end_date, freq=save_freq) if end_date < full_restart_dates[i] else None
+                        # print('end idx: ',var_end_idx)
+                        # print(end_date)
+                        # print(i, k, "append last var")
+                        if vardim == '3d':
+                            var = np.ma.append(var, ds.variables[varname][:var_end_idx,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i], axis=0)
+                        elif vardim == '2d':
+                            var = np.ma.append(var, ds.variables[varname][:var_end_idx,lat0_i:latf_i,lon0_i:lonf_i], axis=0)
                         else:
-                            np.append(var, nc.Dataset(v[0]).variables[varname][:,:,:,:])
+                            print(f"Var dim {vardim} not supported.")
+                        # print(np.shape(var))
+                        return var
+                    else:
+                        # print(i, k, f"append var")
+                        if vardim == '3d':
+                            var = np.ma.append(var, ds.variables[varname][:,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i], axis=0)
+                        elif vardim == '2d':
+                            var = np.ma.append(var, ds.variables[varname][:,lat0_i:latf_i,lon0_i:lonf_i], axis=0)
+                        else:
+                            print(f"Var dim {vardim} not supported.")
+                        
+                        # print(np.shape(var))
+                else:
+                    # print(full_restart_dates[i])
+                    var_start_idx = from_date_to_idx(full_restart_dates[i-1], start_date, freq=save_freq) if start_date < full_restart_dates[i] else None
+                    # print('start idx: ',var_start_idx)
+                    # handle interval within a single ds
+                    if end_date <= full_restart_dates[i]:
+                        var_end_idx = from_date_to_idx(full_restart_dates[i-1], end_date, freq=save_freq) if end_date < full_restart_dates[i] else None
+                        # print('end idx: ',var_end_idx)
+                        # print(end_date)
+                        # print(i, k, "single ds")
+                        if vardim == '3d':
+                            var = ds.variables[varname][var_start_idx:var_end_idx,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i]
+                        elif vardim == '2d':
+                            var = ds.variables[varname][var_start_idx:var_end_idx,lat0_i:latf_i,lon0_i:lonf_i]
+                        else:
+                            print(f"Var dim {vardim} not supported.")
+                        
+                        # print(np.shape(var))
+                        return var
                     else:
                         # create first var
-                        var = nc.Dataset(v[0]).variables[varname][var_start_idx:,:,:,:]
+                        # print(i, k, "first var")
+                        if vardim == '3d':
+                            var = ds.variables[varname][var_start_idx:,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i]
+                        elif vardim == '2d':
+                            var = ds.variables[varname][var_start_idx:,lat0_i:latf_i,lon0_i:lonf_i]
+                        else:
+                            print(f"Var dim {vardim} not supported.")
+                        
+                        # print(np.shape(var))
             else:
                 continue
-        return var
     else:
         print("Invalid interval")
         return None
+
+def get_means (varname, fnds, domds, freq, full_start_date, full_end_date, start_date, end_date,
+                       zoom_coords=((None,None),(None,None),(None,None)), include_zeroh_boundary=False, vardim='3d'):
+    print(f"Get {freq}-mean for {varname}, {start_date}-{end_date}")
+    range_end = pd.date_range(start=start_date, end=end_date, freq=freq).to_pydatetime().tolist()
+    delta_range = range_end[1]-range_end[0]
+    range_start = pd.date_range(start=start_date-delta_range, end=end_date-delta_range, freq=freq).to_pydatetime().tolist()
+    var_mean = None
+    for s,e in zip(range_start, range_end):
+        start = s+datetime.timedelta(days=1)
+        end = e+datetime.timedelta(hours=24) if include_zeroh_boundary else e+datetime.timedelta(hours=18)
+        print(start, end)
+        full_period = get_full_period(varname, fnds, domds, start, end, full_start_date, full_end_date, zoom_coords=zoom_coords, vardim=vardim)
+        if var_mean is None:
+            var_mean = np.ma.array([np.ma.mean(full_period, axis=0)])
+        else:
+            var_mean = np.ma.append(var_mean, np.ma.array([np.ma.mean(full_period, axis=0)]), axis=0)
+    return var_mean
 
 def get_restart_strformat (restart_freq):
     if 'd' in restart_freq:
@@ -393,18 +585,42 @@ def get_ncfiles (exp_name, start_date, end_date, workpath, recursive=False, data
             fn[g][last_restart] = glob.glob(workpath+glob_star+last_search_str)
     return fn
 
-def savez_data (data, data_str, start_date, end_date, restart_strformat, fld='./'):
-    fn = f"numpy_data-{start_date.strftime(restart_strformat)}_{end_date.strftime(restart_strformat)}-{data_str}.npy"
+def savez_data (data, data_str, start_date, end_date, restart_freq='15d', fld='./', masked=True):
+    restart_strformat = get_restart_strformat(restart_freq=restart_freq)
+    fn = f"{start_date.strftime(restart_strformat)}_{end_date.strftime(restart_strformat)}-{data_str}.npy.npz"
+    os.makedirs(fld, exist_ok=True)
     with open(f"{fld}{fn}", 'wb') as f:
-        np.savez(f"{fld}{fn}", data)
+        print(f"Saving {data_str} in {fld}{fn}")
+        np.savez(f"{fld}{fn}", np.ma.filled(data, np.nan) if masked else data)
 
-def loadz_data (folder, arr_name='arr_0'):
+def loadz_data (varname, folder, start_date, end_date, restart_freq='15d', arr_name='arr_0', masked=True):
+    restart_strformat = get_restart_strformat(restart_freq=restart_freq)
     datad = {}
-    fns = glob.glob(folder+"/*.npz")
+    fns = glob.glob(folder+f"/{start_date.strftime(restart_strformat)}_{end_date.strftime(restart_strformat)}-*{varname}*.npz")
     for fn in fns:
         # print(fn)
         with open(fn, 'rb') as f:
             datak = os.path.basename(fn).split('.')[0].split('-')[-1]
             print(datak)
-            datad[datak] = np.load(f)[arr_name]
+            datad[datak] = np.ma.masked_invalid(np.load(f)[arr_name]) if masked else np.load(f)[arr_name]
     return datad
+
+def savez_mean_fields (savez_fld, varname, fn_d, grid, freq, full_start_date, full_end_date, start_date, end_date,
+                      restart_freq='15d', zoom_coords=((None,None),(None,None),(None,None)), vardim='3d', masked=True): # lev, lat, lon
+
+    os.makedirs(savez_fld, exist_ok=True)
+    means_d = {}
+    for dsname, (fn, domds) in fn_d.items():
+        print(dsname)
+        m = get_means(varname, fn[grid], domds, freq, full_start_date, full_end_date, start_date, end_date, zoom_coords=zoom_coords, vardim=vardim)
+        means_d[dsname] = m
+        savez_data(m, f"{varname}_{dsname}_{freq}mean", start_date, end_date, restart_freq=restart_freq, fld=savez_fld, masked=masked)
+    return means_d
+
+def loadz_mean_fields (varname, loadz_fld, exp_list, freq, start_date, end_date, restart_freq='15d', masked=True):
+    data_d = loadz_data(f"{varname}*{freq}", loadz_fld, start_date, end_date, restart_freq=restart_freq, masked=masked)
+    means_d = {}
+    for e in exp_list:
+        means_d[e] = data_d[f"{varname}_{e}_{freq}mean"]
+    return means_d
+    
