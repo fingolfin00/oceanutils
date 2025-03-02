@@ -252,6 +252,14 @@ def rolling_mean_paolo (field, window):
 def rolling_mean (field, window):
     return np.convolve(np.ravel(np.array(field)), np.ones(window)/window, mode='same')
 
+def down_sample(x, f=7):
+    # pad to a multiple of f, so we can reshape
+    # use nan for padding, so we needn't worry about denominator in
+    # last chunk
+    xp = np.ma.masked_invalid(np.r_[x, np.nan + np.zeros((-np.shape(x)[0] % f,))], np.nan)
+    # reshape, so each chunk gets its own row, and then take mean
+    return np.ma.mean(xp.reshape(-1, f), axis=-1)
+
 def get_restart_strformat (restart_freq):
     if 'd' in restart_freq:
         return "%Y%m%d"
@@ -310,7 +318,7 @@ def get_var_from_ds (varname, ds, domds, grid, zoom_coords=((None,None),(None,No
     return var
 
 def get_ke (u, v):
-    return (u**2 + v**2)
+    return 0.5*(u**2 + v**2)
 
 def get_ke_3dspatial_mean (u, v, e1u, e2u, e3u, e1v, e2v, e3v):
     us = np.ma.sum(0.5*np.ma.power(u,2)*e1u*e2u*e3u, axis=(1,2,3)) / np.ma.sum(e1u*e2u*e3u, axis=(1,2,3))
@@ -343,22 +351,41 @@ def get_zonal_inflow (u, e2u, e3u, units='sverdrup'):
 
 def get_zonal_inflow_tracer (u, tracer, e2t, e3t):
     mask = u>0
-    return np.ma.sum(tracer*e2t*e3t*mask, axis=(1,2,3)) / np.ma.sum(e2t*e3t*mask, axis=(1,2,3))
+    return np.ma.sum(tracer*e2t*e3t, axis=(1,2,3)) / np.ma.sum(e2t*e3t, axis=(1,2,3))
 
 def get_zonal_outlow_tracer (u, tracer, e2t, e3t):
     mask = u<0
-    return np.ma.sum(tracer*e2t*e3t*mask, axis=(1,2,3)) / np.ma.sum(e2t*e3t*mask, axis=(1,2,3))
+    return np.ma.sum(tracer*e2t*e3t, axis=(1,2,3)) / np.ma.sum(e2t*e3t, axis=(1,2,3))
 
-def get_interface (u, domds, interface_minlev=400):
-    mean_profile = np.ma.masked_equal(u[:,:,:,:],0).mean(axis=(2,3))
+def get_change_sign (arr):
+    return (np.ma.diff(np.sign(arr)) > 0)*1 + (np.ma.diff(np.sign(arr)) < 0)*(-1)
+
+def get_interface (u, domds):
+    mean_profile = np.ma.mean(u[:,:,:,:], axis=(2,3))
+    cs_mean_profile = get_change_sign(mean_profile)
     interface = np.array([])
-    z = create_levspace(domds)[0:get_idx_from_lev(interface_minlev, domds)]
-    for i in range(np.shape(mean_profile[:,0:get_idx_from_lev(interface_minlev, domds)])[0]):
-        interface = np.ma.append(interface, z[get_idx_in_arr(0,mean_profile[i,0:get_idx_from_lev(interface_minlev, domds)])])
+    for i in np.arange(np.shape(cs_mean_profile)[0]):
+        interface_idxs = np.where(cs_mean_profile[i]==-1)
+        # print(interface_idxs)
+        if len(interface_idxs[0]) > 0:
+            interface = np.append(interface, create_levspace(domds)[interface_idxs[0][0]])
+        else:
+            interface = np.append(interface, np.nan)
+    return mean_profile, np.ma.masked_invalid(interface, np.nan)
+
+def get_interface_old (u, domds, interface_minlev=400):
+    mean_profile = np.ma.mean(u[:,:,:,:], axis=(2,3))
+    interface_minlev_idx = get_idx_from_lev(interface_minlev, domds)
+    interface = np.ma.array([])
+    z = create_levspace(domds)[0:interface_minlev_idx]
+    cut_mean_profile = mean_profile[:, 0:interface_minlev_idx]
+    for i in range(np.shape(cut_mean_profile)[0]):
+        interface_idx = get_idx_in_arr(0, cut_mean_profile[i,:])
+        interface = np.ma.append(interface, z[interface_idx])
     return mean_profile, interface
 
 def get_full_interface (fnds, domds, start_date, end_date, full_start_date, full_end_date,
-                   lat0, latf, lon, restart_freq='15d', interface_minlev=400):
+                   lat0, latf, lon, restart_freq='15d'):
     
     lat0_i, latf_i = get_idx_from_lat(lat0,domds), get_idx_from_lat(latf,domds)
     lon0_i, lonf_i = get_idx_from_lon(lon,domds), get_idx_from_lon(lon,domds)+1
@@ -369,7 +396,7 @@ def get_full_interface (fnds, domds, start_date, end_date, full_start_date, full
     u = get_full_period ('vozocrtx', fnds['U'], domds, start_date, end_date, full_start_date, full_end_date,
                          zoom_coords=zoom_coords) # lev, lat, lon
     _, e2u, e3u = get_scale_factor(domds, 'U', u, zoom_coords=zoom_coords)
-    return get_interface(u, domds, interface_minlev=interface_minlev)
+    return get_interface(u, domds)
 
 def get_full_tracer_flow (fnds, domds, start_date, end_date, full_start_date, full_end_date,
                    lat0, latf, lon, restart_freq='15d'):
@@ -393,7 +420,7 @@ def get_full_tracer_flow (fnds, domds, start_date, end_date, full_start_date, fu
     return zonalinT, zonalinS, zonaloutT, zonaloutS
 
 def get_zonal_metrics (fnds, domds, start_date, end_date, full_start_date, full_end_date,
-                       lat0, latf, lon, restart_freq='15d', interface_minlev=400):
+                       lat0, latf, lon, restart_freq='15d'):
     
     lat0_i, latf_i = get_idx_from_lat(lat0,domds), get_idx_from_lat(latf,domds)
     lon0_i, lonf_i = get_idx_from_lon(lon,domds), get_idx_from_lon(lon,domds)+1
@@ -420,7 +447,7 @@ def get_zonal_metrics (fnds, domds, start_date, end_date, full_start_date, full_
     zonaloutT = get_zonal_outlow_tracer(u, T, e2t, e3t)
     zonaloutS = get_zonal_outlow_tracer(u, S, e2t, e3t)
 
-    mean_profile, interface = get_interface(u, domds, interface_minlev=interface_minlev)
+    mean_profile, interface = get_interface(u, domds)
     
     return {'outflow': outflow, 'inflow': inflow, 'netflow': netflow,
             'zonalinT': zonalinT, 'zonalinS': zonalinS, 'zonaloutT': zonaloutT, 'zonaloutS': zonaloutS, 
@@ -440,8 +467,8 @@ def get_full_period (varname, fnds, domds,
                      vardim='3d', restart_freq='15d', save_freq='6h',
                      zoom_coords=((None,None),(None,None),(None,None))): # lev, lat, lon
     full_restart_dates = pd.date_range(start=full_start_date, end=full_end_date, freq=restart_freq).to_pydatetime().tolist()
-    start_date, end_date = from_date_to_datetime(start_date), from_date_to_datetime(end_date)
-    full_start_date, full_end_date = from_date_to_datetime(full_start_date), from_date_to_datetime(full_end_date)
+    start_date, end_date = start_date, end_date
+    full_start_date, full_end_date = full_start_date, full_end_date
     if full_end_date > full_restart_dates[-1]:
         full_restart_dates.append(full_end_date+datetime.timedelta(days=1))
     lev0_i, levf_i = get_idx_from_lev(zoom_coords[0][0], domds) if zoom_coords[0][0] else None, get_idx_from_lev(zoom_coords[0][1], domds) if zoom_coords[0][1] else None
@@ -464,8 +491,8 @@ def get_full_period (varname, fnds, domds,
                 if var is not None:
                     if end_date <= full_restart_dates[i]:
                         # print(full_restart_dates[i-1], end_date)
-                        var_end_idx = from_date_to_idx(full_restart_dates[i-1], end_date, freq=save_freq) if end_date < full_restart_dates[i] else None
-                        # print('end idx: ',var_end_idx)
+                        var_end_idx = from_date_to_idx(full_restart_dates[i-1], end_date, freq=save_freq)+1 if end_date < full_restart_dates[i] else None
+                        print('end idx: ',var_end_idx)
                         # print(end_date)
                         # print(i, k, "append last var")
                         if vardim == '3d':
@@ -487,14 +514,16 @@ def get_full_period (varname, fnds, domds,
                         
                         # print(np.shape(var))
                 else:
+                    # print(full_restart_dates[i-1])
                     # print(full_restart_dates[i])
                     var_start_idx = from_date_to_idx(full_restart_dates[i-1], start_date, freq=save_freq) if start_date < full_restart_dates[i] else None
-                    # print('start idx: ',var_start_idx)
+                    # print('start date:',start_date)
+                    print('start idx:',var_start_idx)
                     # handle interval within a single ds
                     if end_date <= full_restart_dates[i]:
-                        var_end_idx = from_date_to_idx(full_restart_dates[i-1], end_date, freq=save_freq) if end_date < full_restart_dates[i] else None
-                        # print('end idx: ',var_end_idx)
-                        # print(end_date)
+                        var_end_idx = from_date_to_idx(full_restart_dates[i-1], end_date, freq=save_freq)+1 if end_date < full_restart_dates[i] else None
+                        print('end idx:',var_end_idx)
+                        # print('end date:',end_date)
                         # print(i, k, "single ds")
                         if vardim == '3d':
                             var = ds.variables[varname][var_start_idx:var_end_idx,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i]
@@ -507,7 +536,7 @@ def get_full_period (varname, fnds, domds,
                         return var
                     else:
                         # create first var
-                        # print(i, k, "first var")
+                        print(i, k, "first var")
                         if vardim == '3d':
                             var = ds.variables[varname][var_start_idx:,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i]
                         elif vardim == '2d':
