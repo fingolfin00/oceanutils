@@ -16,9 +16,9 @@ def get_cbar_ticks_num (vmax, vmin, contour_step_level):
     return int(np.abs(vmax-vmin)//contour_step_level)+2
 
 def plot_lonlat (ds, var, var_name, level, keep_var_dim=False, savefig_fn=None, savefig_resfac=1, hres=24, vres=12, add_lev_str=False,
-                 adjust_plt=False, vmin=None, vmax=None, fmt=None, method='pcolor',
+                 adjust_plt=False, vmin=None, vmax=None, fmt=None, method='pcolor', contour_lev_col=None, contour_step_level=100, contour_zero_lev_label=False,
                  zoom_idx=((None,None), (None,None)), zoom_coords=((None,None), (None,None)), add_zoomstr_title=False, noiplot=False,
-                 cbar=True, cbar_ticks_num=10, cbar_loc='right', cbar_title='',
+                 cbar=True, cbar_ticks_num=10, cbar_loc='right', cbar_title='', contour_facecolor='grey', quiver=False,
                  cmap='jet', mask=None, point_idx=(None,None), point_coords=(None,None), point_clr='ko'):
     
     lat0_i, latf_i = ou.get_idx_from_lat(zoom_coords[0][0], ds) if zoom_coords[0][0] else zoom_idx[0][0], ou.get_idx_from_lat(zoom_coords[0][1], ds) if zoom_coords[0][1] else zoom_idx[0][1]
@@ -73,6 +73,11 @@ def plot_lonlat (ds, var, var_name, level, keep_var_dim=False, savefig_fn=None, 
         ax.plot(PLT_LON[point_lon_i,point_lat_i], PLT_LAT[point_lon_i,point_lat_i], point_clr)
         ax.annotate(f"({point_lat:.2f}, {point_lon:.2f})", (PLT_LON[point_lon_i,point_lat_i], PLT_LAT[point_lon_i,point_lat_i]), xytext=(4,4), textcoords='offset points')
 
+    if quiver:
+        s = quiver['strides']
+        Q = ax.quiver(PLT_LON[::s,::s], PLT_LAT[::s,::s], quiver['u'][::s,::s], quiver['v'][::s,::s], units=quiver['units'], width=quiver['width'], color=quiver['color'],
+                     headwidth=quiver['headwidth'], scale=quiver['scale'], headlength=quiver['headlength'], headaxislength=quiver['headaxislength'], visible=True)
+
     if cbar:
         divider = make_axes_locatable(ax)
         cax = divider.append_axes(cbar_loc, size="2%", pad=0.05)
@@ -117,7 +122,7 @@ def plot_2d (ds, var, var_name, savefig_fn=None, savefig_resfac=1, hres=24, vres
     
     PLT_LON, PLT_LAT = np.meshgrid(ou.create_lonspace(ds)[lon0_i:lonf_i], ou.create_latspace(ds)[lat0_i:latf_i])
 
-    vmin_plt, vmax_plt = np.ma.min(var_plt) if vmin is None else vmin, np.ma.max(var_plt) if vmax is None else vmax  # zeros not counted
+    vmin_plt, vmax_plt = np.ma.min(var_plt) if vmin is None else vmin, np.ma.max(var_plt) if vmax is None else vmax
     vcenter_plt = vmin_plt+(vmax_plt-vmin_plt)/2
     print(f"vmin, vcenter, vmax = ({vmin_plt:.3f}, {vcenter_plt:.3f}, {vmax_plt:.3f})")
 
@@ -226,15 +231,17 @@ def plot_lonlev (ds, var, var_name, lat_i, keep_var_dim=False, savefig_fn=None, 
     
     lev0_i, levf_i = ou.get_idx_from_lev(zoom_coords[0][0], ds) if zoom_coords[0][0] else zoom_idx[0][0], ou.get_idx_from_lev(zoom_coords[0][1], ds) if zoom_coords[0][1] else zoom_idx[0][1]
     lon0_i, lonf_i = ou.get_idx_from_lon(zoom_coords[1][0], ds) if zoom_coords[1][0] else zoom_idx[1][0], ou.get_idx_from_lon(zoom_coords[1][1], ds) if zoom_coords[1][1] else zoom_idx[1][1]
+    print(lev0_i, levf_i)
+    print(lon0_i, lonf_i)
 
     if keep_var_dim:
         var_plt = var[:,lat_i,:]*mask[:,lat_i,:] if mask is not None else var[:,lat_i,:]
     else:
         var_plt = var[lev0_i:levf_i,lat_i,lon0_i:lonf_i]*mask[lev0_i:levf_i,lat_i,lon0_i:lonf_i] if mask is not None else var[lev0_i:levf_i,lat_i,lon0_i:lonf_i]
-    PLT_LON, PLT_LEV = np.meshgrid(ou.create_lonspace(ds)[lon0_i:lonf_i], lev_factor*ou.create_levspace(ds)[lev0_i:levf_i])
 
-    vmin_plt, vmax_plt = np.ma.min(var_plt) if vmin is None else vmin, np.ma.max(var_plt) if vmax is None else vmax  # zeros not counted
+    vmin_plt, vmax_plt = np.ma.min(var_plt) if vmin is None else vmin, np.ma.max(var_plt) if vmax is None else vmax
     vcenter_plt = vmin_plt+(vmax_plt-vmin_plt)/2
+    PLT_LON, PLT_LEV = np.meshgrid(ou.create_lonspace(ds)[lon0_i:lonf_i], lev_factor*ou.create_levspace(ds)[lev0_i:levf_i])
     print(f"vmin, vcenter, vmax = ({vmin_plt:.3f}, {vcenter_plt:.3f}, {vmax_plt:.3f})")
 
     if noiplot:
