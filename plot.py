@@ -146,7 +146,7 @@ def plot_2d (ds, var, var_name, savefig_fn=None, savefig_resfac=1, hres=24, vres
             cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), cmap=cmap, alpha=1)
             ax.set_facecolor(contour_facecolor)
     elif method == 'contourf':
-        cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=contourf_levs, cmap=cmap, alpha=1)
+        cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), cmap=cmap, alpha=1)
         ax.set_facecolor(contour_facecolor)
     else:
         print(f"Method {method} not supported")
@@ -437,32 +437,32 @@ def save_lonlat_pictures (ds, var, savefig_varname, start_date, end_date, level,
                     savefig_fn=f"{save_fld}{savefig_varname}_{savefig_period}.png",
                     vmin=vmin, vmax=vmax, mask=None, zoom_coords=((lat0,latf),(lon0, lonf)), noiplot=noiplot)
 
-def plot_bathy (ds, lati, latf, loni, lonf, ds2=None): 
+def plot_bathy (ds, lati, latf, loni, lonf, vmin, vcenter, vmax, bathy_var=None, cmap='Blues'): 
     lat0_i, latf_i = ou.get_idx_from_lat(lati, ds), ou.get_idx_from_lat(latf, ds)
     lon0_i, lonf_i = ou.get_idx_from_lon(loni, ds), ou.get_idx_from_lon(lonf, ds)
-
-    if ds2 is not None:
-        lat0_i_2, latf_i_2 = ou.get_idx_from_lat(lati, ds2), ou.get_idx_from_lat(latf, ds2)
-        lon0_i_2, lonf_i_2 = ou.get_idx_from_lon(loni, ds2), ou.get_idx_from_lon(lonf, ds2)
-        PLT_LON_2, PLT_LAT_2 = np.meshgrid(ou.create_lonspace(ds2)[lon0_i_2:lonf_i_2], ou.create_latspace(ds2)[lat0_i_2:latf_i_2])
-        X2, Y2, Z2 = PLT_LON_2, PLT_LAT_2, -ds2.variables['bathy_metry'][0,lat0_i_2:latf_i_2,lon0_i_2:lonf_i_2]
-    
     PLT_LON, PLT_LAT = np.meshgrid(ou.create_lonspace(ds)[lon0_i:lonf_i], ou.create_latspace(ds)[lat0_i:latf_i])
-    X, Y, Z = PLT_LON, PLT_LAT, -ds.variables['bathy_metry'][0,lat0_i:latf_i,lon0_i:lonf_i]
+    levspace = ou.create_levspace(ds)
+    if len(np.shape(levspace)) == 2:
+        X, Y, Z = PLT_LON, PLT_LAT, levspace[lat0_i:latf_i,lon0_i:lonf_i]
+    else:
+        # print(np.sum(np.shape(PLT_LON)))
+        # levspaceflat = [levspace]*(np.prod(np.shape(PLT_LON)))
+        # levspace2d = np.array(levspaceflat).reshape(np.shape(levspace)+np.shape(PLT_LON))
+        X, Y, Z = PLT_LON, PLT_LAT, bathy_var[lat0_i:latf_i,lon0_i:lonf_i]
     
     fig, ax = plt.subplots(1, 1, subplot_kw={'projection': '3d'})
     # colors = ["#ffffcc", "#a1dab4", "#41b6c4", "#2c7fb8", "#253494"]
     # my_cmap = ListedColormap(colors, name="my_cmap")
-    ax.plot_surface(X, Y, Z, vmin=-800, vmax=0,
-                    # cmap=cmocean.cm.ice,
-                    cmap = 'Blues',
+    ax.plot_surface(X, Y, Z,
+                    # vmin=vmin_plt, vmax=vmax_plt,
+                    norm=TwoSlopeNorm(vmin=vmin, vmax=vmax, vcenter=vcenter),
+                    cmap=cmap,
+                    # cmap = 'Blues',
                     # color='blue',
                     cstride=1, rstride=1, alpha=.9, antialiased=True)
-    if ds2 is not None:
-        ax.plot_surface(X2, Y2, Z2, color='blue', cstride=1, rstride=1, alpha=.8)
     
     ax.set_proj_type('persp')  # FOV = 0 deg
-    ax.view_init(elev=30, azim=-140, roll=0)
+    ax.view_init(elev=15, azim=-135, roll=0)
     fig.set_size_inches(24,24)
     return (fig, ax)
 
