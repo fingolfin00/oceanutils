@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 # import matplotlib.animation as anim
 # import matplotlib.patches as patches
 from matplotlib.collections import PatchCollection
-from matplotlib.colors import TwoSlopeNorm, LogNorm
+from matplotlib.colors import TwoSlopeNorm, LogNorm, BoundaryNorm
 import matplotlib.ticker as tick
 import matplotlib.dates as pldates
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -39,6 +39,11 @@ def plot_lonlat (ds, var, var_name, level, keep_var_dim=False, savefig_fn=None, 
     if noiplot:
         plt.ioff()
 
+    if type(contour_step_level) == list:
+        levels = contour_step_level
+    else:
+        levels = np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level)
+
     contour_neg_ls = 'solid'
     if method == 'pcolor':
             cs = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
@@ -47,19 +52,19 @@ def plot_lonlat (ds, var, var_name, level, keep_var_dim=False, savefig_fn=None, 
             def fmt(x):
                 return f"{-x:.1f}"[:-2]
         if contour_lev_col:
-            cs = ax.contour(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), negative_linestyles=contour_neg_ls, colors=contour_lev_col, alpha=1)
+            cs = ax.contour(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, negative_linestyles=contour_neg_ls, colors=contour_lev_col, alpha=1)
         else:
-            cs = ax.contour(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), negative_linestyles=contour_neg_ls, cmap=cmap, alpha=1)
+            cs = ax.contour(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, negative_linestyles=contour_neg_ls, cmap=cmap, alpha=1)
         if contour_zero_lev_label:
             cl = ax.clabel(cs, cs.levels, fmt=fmt, fontsize=10)
         else:
             cl = ax.clabel(cs, cs.levels[:-1], fmt=fmt, fontsize=10)
         # ax.set_bad(contour_facecolor)
         if method == 'filled_contour':
-            cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), cmap=cmap, alpha=1)
+            cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, cmap=cmap, alpha=1)
             ax.set_facecolor(contour_facecolor)
     elif method == 'contourf':
-        cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=contourf_levs, cmap=cmap, alpha=1)
+        cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, cmap=cmap, alpha=1)
         ax.set_facecolor(contour_facecolor)
     else:
         print(f"Method {method} not supported")
@@ -106,9 +111,9 @@ def plot_lonlat (ds, var, var_name, level, keep_var_dim=False, savefig_fn=None, 
 
 
 def plot_2d (ds, var, var_name, savefig_fn=None, savefig_resfac=1, hres=24, vres=12, method='pcolor', keep_var_dim=False,
-             contour_step_level=100, contour_facecolor='grey', contour_lev_col=None, contour_zero_lev_label=False,
-             adjust_plt=False, fmt=None, vmin=None, vmax=None,
-             zoom_idx=((None,None), (None,None)), zoom_coords=((None,None), (None,None)), add_zoomstr_title=False,
+             contour_step_level=100, contour_facecolor='grey', contour_lev_col=None, contour_zero_lev_label=False, contour_color_factor=None,
+             adjust_plt=False, fmt=None, vmin=None, vmax=None, strides=None, contour_lev_labels=True, contour_linewidths=1.5, contour_linestyles=None,
+             zoom_idx=((None,None), (None,None)), zoom_coords=((None,None), (None,None)), add_zoomstr_title=False, extend='neither',
              cbar=True, cbar_ticks_num=10, cbar_loc='right', cbar_title='', cmap='jet', mask=None, noiplot=False,
              points_idx=[(None,None)], points_coords=[(None,None)], points_clr=['ko'], points_coords_ann=[None], points_idx_ann=[None], points_coords_ann_opts=[None], points_idx_ann_opts=[None]):
     
@@ -122,6 +127,10 @@ def plot_2d (ds, var, var_name, savefig_fn=None, savefig_resfac=1, hres=24, vres
     
     PLT_LON, PLT_LAT = np.meshgrid(ou.create_lonspace(ds)[lon0_i:lonf_i], ou.create_latspace(ds)[lat0_i:latf_i])
 
+    if strides:
+        var_plt = var_plt[::strides,::strides]
+        PLT_LON, PLT_LAT = PLT_LON[::strides,::strides], PLT_LAT[::strides,::strides]
+
     vmin_plt, vmax_plt = np.ma.min(var_plt) if vmin is None else vmin, np.ma.max(var_plt) if vmax is None else vmax
     vcenter_plt = vmin_plt+(vmax_plt-vmin_plt)/2
     print(f"vmin, vcenter, vmax = ({vmin_plt:.3f}, {vcenter_plt:.3f}, {vmax_plt:.3f})")
@@ -130,28 +139,37 @@ def plot_2d (ds, var, var_name, savefig_fn=None, savefig_resfac=1, hres=24, vres
     fig.set_size_inches(hres,vres)
     if noiplot:
         plt.ioff()
+    
+    if type(contour_step_level) == list:
+        levels = contour_step_level
+        ncolors = len(contour_step_level)*contour_color_factor if contour_color_factor else len(contour_step_level)
+        norm = BoundaryNorm(contour_step_level, ncolors)
+    else:
+        levels = np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level)
+        norm = TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt)
 
     contour_neg_ls = 'solid'
     if method == 'pcolor':
-            cs = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
+            cs = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=norm, cmap=cmap, alpha=1)
     elif method == 'contour' or method == 'filled_contour':
         if fmt is None:
             def fmt(x):
                 return f"{-x:.1f}"[:-2]
         if contour_lev_col:
-            cs = ax.contour(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), negative_linestyles=contour_neg_ls, colors=contour_lev_col, alpha=1)
+            cs = ax.contour(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, negative_linestyles=contour_neg_ls, colors=contour_lev_col, alpha=1, extend='both', linewidths=contour_linewidths, linestyles=contour_linestyles)
         else:
-            cs = ax.contour(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), negative_linestyles=contour_neg_ls, cmap=cmap, alpha=1)
-        if contour_zero_lev_label:
-            cl = ax.clabel(cs, cs.levels, fmt=fmt, fontsize=10)
-        else:
-            cl = ax.clabel(cs, cs.levels[:-1], fmt=fmt, fontsize=10)
+            cs = ax.contour(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, negative_linestyles=contour_neg_ls, cmap=cmap, alpha=1, extend=extend, linewidths=contour_linewidths, linestyles=contour_linestyles)
+        if contour_lev_labels:
+            if contour_zero_lev_label:
+                cl = ax.clabel(cs, cs.levels, fmt=fmt, fontsize=10)
+            else:
+                cl = ax.clabel(cs, cs.levels[:-1], fmt=fmt, fontsize=10)
         # ax.set_bad(contour_facecolor)
         if method == 'filled_contour':
-            cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), cmap=cmap, alpha=1)
+            cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
             ax.set_facecolor(contour_facecolor)
     elif method == 'contourf':
-        cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), cmap=cmap, alpha=1)
+        cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
         ax.set_facecolor(contour_facecolor)
     else:
         print(f"Method {method} not supported")
@@ -203,7 +221,8 @@ def plot_2d (ds, var, var_name, savefig_fn=None, savefig_resfac=1, hres=24, vres
         cax = divider.append_axes(cbar_loc, size="2%", pad=0.05)
         # cbar_ticks_num = contourf_levs+2 if method=='contourf' or method=='contour' or method=='filled_contour' else cbar_ticks_num
         # print(cbar_ticks_num)
-        cb = fig.colorbar(cs, cax=cax, ticks=tick.LinearLocator(numticks=cbar_ticks_num))
+        ticks = tick.FixedLocator(contour_step_level) if type(contour_step_level)==list else tick.LinearLocator(numticks=cbar_ticks_num)
+        cb = fig.colorbar(cs, cax=cax, ticks=ticks)
         cb.ax.set_title(cbar_title, fontsize=8)
 
     if adjust_plt : ax.set_aspect('equal', adjustable='box')
@@ -290,7 +309,7 @@ def plot_lonlev (ds, var, var_name, lat_i, keep_var_dim=False, savefig_fn=None, 
 
 
 def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h', keep_var_dim=False, method='pcolor', fmt=None,
-                     contourf_levs=10, contour_step_level=100, contour_facecolor='grey', contour_lev_col=None, contour_zero_lev_label=False,
+                     contour_step_level=100, contour_facecolor='grey', contour_lev_col=None, contour_zero_lev_label=False,
                      savefig_fn=None, savefig_resfac=1, hres=24, vres=12,
                      lev_factor=1, adjust_plt=False, vmin=None, vmax=None,
                      zoom_idx=((None,None),), zoom_coords=((None,None),), add_zoomstr_title=False, cbar=True, cbar_loc='right',
@@ -317,6 +336,11 @@ def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h',
     fig, ax = plt.subplots(1,1)
     fig.set_size_inches(hres,vres)
 
+    if type(contour_step_level) == list:
+        levels = contour_step_level
+    else:
+        levels = np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level)
+
     contour_neg_ls = 'solid'
     if method == 'pcolor':
             cs = ax.pcolormesh(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
@@ -325,19 +349,19 @@ def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h',
             def fmt(x):
                 return f"{-x:.1f}"[:-2]
         if contour_lev_col:
-            cs = ax.contour(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), negative_linestyles=contour_neg_ls, colors=contour_lev_col, alpha=1)
+            cs = ax.contour(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, negative_linestyles=contour_neg_ls, colors=contour_lev_col, alpha=1)
         else:
-            cs = ax.contour(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), negative_linestyles=contour_neg_ls, cmap=cmap, alpha=1)
+            cs = ax.contour(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, negative_linestyles=contour_neg_ls, cmap=cmap, alpha=1)
         if contour_zero_lev_label:
             cl = ax.clabel(cs, cs.levels, fmt=fmt, fontsize=10)
         else:
             cl = ax.clabel(cs, cs.levels[:-1], fmt=fmt, fontsize=10)
         # ax.set_bad(contour_facecolor)
         if method == 'filled_contour':
-            cs = ax.contourf(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), cmap=cmap, alpha=1)
+            cs = ax.contourf(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, cmap=cmap, alpha=1)
             ax.set_facecolor(contour_facecolor)
     elif method == 'contourf':
-        cs = ax.contourf(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level), cmap=cmap, alpha=1)
+        cs = ax.contourf(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, cmap=cmap, alpha=1)
         ax.set_facecolor(contour_facecolor)
     else:
         print(f"Method {method} not supported")
@@ -444,20 +468,22 @@ def save_lonlat_pictures (ds, var, savefig_varname, start_date, end_date, level,
                     savefig_fn=f"{save_fld}{savefig_varname}_{savefig_period}.png",
                     vmin=vmin, vmax=vmax, mask=None, zoom_coords=((lat0,latf),(lon0, lonf)), noiplot=noiplot)
 
-def plot_bathy (ds, lati, latf, loni, lonf, vmin, vcenter, vmax, bathy_var=None, cmap='Blues'): 
+def plot_bathy (ds, ax, lati, latf, loni, lonf, vmin, vcenter, vmax,
+                elev, azim, roll, bathy_var=None, cmap='Blues'): 
     lat0_i, latf_i = ou.get_idx_from_lat(lati, ds), ou.get_idx_from_lat(latf, ds)
     lon0_i, lonf_i = ou.get_idx_from_lon(loni, ds), ou.get_idx_from_lon(lonf, ds)
     PLT_LON, PLT_LAT = np.meshgrid(ou.create_lonspace(ds)[lon0_i:lonf_i], ou.create_latspace(ds)[lat0_i:latf_i])
-    levspace = ou.create_levspace(ds)
-    if len(np.shape(levspace)) == 2:
-        X, Y, Z = PLT_LON, PLT_LAT, levspace[lat0_i:latf_i,lon0_i:lonf_i]
+    if bathy_var is None:
+        bathy_var = ou.create_levspace(ds)
+    if len(np.shape(bathy_var)) == 2:
+        X, Y, Z = PLT_LON, PLT_LAT, bathy_var[lat0_i:latf_i,lon0_i:lonf_i]
     else:
         # print(np.sum(np.shape(PLT_LON)))
         # levspaceflat = [levspace]*(np.prod(np.shape(PLT_LON)))
         # levspace2d = np.array(levspaceflat).reshape(np.shape(levspace)+np.shape(PLT_LON))
         X, Y, Z = PLT_LON, PLT_LAT, bathy_var[lat0_i:latf_i,lon0_i:lonf_i]
     
-    fig, ax = plt.subplots(1, 1, subplot_kw={'projection': '3d'})
+    
     # colors = ["#ffffcc", "#a1dab4", "#41b6c4", "#2c7fb8", "#253494"]
     # my_cmap = ListedColormap(colors, name="my_cmap")
     ax.plot_surface(X, Y, Z,
@@ -469,7 +495,12 @@ def plot_bathy (ds, lati, latf, loni, lonf, vmin, vcenter, vmax, bathy_var=None,
                     cstride=1, rstride=1, alpha=.9, antialiased=True)
     
     ax.set_proj_type('persp')  # FOV = 0 deg
-    ax.view_init(elev=15, azim=-135, roll=0)
-    fig.set_size_inches(24,24)
-    return (fig, ax)
+    ax.view_init(elev=elev, azim=azim, roll=roll)
+    ax.xaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+    ax.yaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+    ax.zaxis.set_pane_color((1.0, 1.0, 1.0, 0.0))
+    ax.xaxis._axinfo["grid"]['color'] =  (1,1,1,0)
+    ax.yaxis._axinfo["grid"]['color'] =  (1,1,1,0)
+    ax.zaxis._axinfo["grid"]['color'] =  (1,1,1,0)
+    return ax
 
