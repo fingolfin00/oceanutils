@@ -328,7 +328,26 @@ def get_ke_3dspatial_mean (u, v, e1u, e2u, e3u, e1v, e2v, e3v):
 def get_ke_2dspatial_mean (u, v, e1u, e2u, e1v, e2v):
     us = np.ma.sum(0.5*np.ma.power(u,2)*e1u*e2u, axis=(2,3)) / np.ma.sum(e1u*e2u, axis=(2,3))
     vs = np.ma.sum(0.5*np.ma.power(v,2)*e1v*e2v, axis=(2,3)) / np.ma.sum(e1v*e2v, axis=(2,3))
-    return us+vs 
+    return us+vs
+
+def get_meridional_outflow (v, e1v, e3v, units='sverdrup'):
+    mask = v<0
+    doutflow = v*e1v*e3v*mask
+    if units == 'sverdrup':
+        outflow = np.ma.sum(doutflow, axis=(1,2,3))/10**6
+    else:
+        outflow = np.ma.sum(doutflow, axis=(1,2,3))
+    # print(outflow)
+    return outflow
+
+def get_meridional_inflow (v, e1v, e3v, units='sverdrup'):
+    mask = v>0
+    dinflow = v*e1v*e3v*mask
+    if units == 'sverdrup':
+        inflow = np.ma.sum(dinflow, axis=(1,2,3))/10**6
+    else:
+        inflow = np.ma.sum(dinflow, axis=(1,2,3))
+    return inflow
 
 def get_zonal_outflow (u, e2u, e3u, units='sverdrup'):
     mask = u<0
@@ -452,6 +471,23 @@ def get_zonal_metrics (fnds, domds, start_date, end_date, full_start_date, full_
     return {'outflow': outflow, 'inflow': inflow, 'netflow': netflow,
             'zonalinT': zonalinT, 'zonalinS': zonalinS, 'zonaloutT': zonaloutT, 'zonaloutS': zonaloutS, 
             'interface': interface, 'mean_profile': mean_profile}
+
+def get_meridional_transport (fnds, domds, start_date, end_date, full_start_date, full_end_date,
+                       lat0, latf, lon, restart_freq='15d'):
+    lat0_i, latf_i = get_idx_from_lat(lat0,domds), get_idx_from_lat(latf,domds)
+    lon0_i, lonf_i = get_idx_from_lon(lon,domds), get_idx_from_lon(lon,domds)+1
+    lon0, lonf = get_lon_from_idx(lon0_i,domds), get_lon_from_idx(lonf_i,domds)
+    # print(lat0_i, latf_i, lon0_i, lonf_i)
+    zoom_coords = ((None,None),(lat0, latf),(lon0, lonf))
+
+    v = get_full_period ('vomecrty', fnds['V'], domds, start_date, end_date, full_start_date, full_end_date,
+                     zoom_coords=zoom_coords) # lev, lat, lon
+    e1v, _, e3v = get_scale_factor(domds, 'V', v, zoom_coords=zoom_coords)
+
+    outflow = get_meridional_outflow(v, e1v, e3v)
+    inflow = get_meridional_inflow(v, e1v, e3v)
+    netflow = outflow + inflow
+    return {'mer_outflow': outflow, 'mer_inflow': inflow, 'mer_netflow': netflow}
 
 def from_date_to_datetime (date_datefmt):
     return datetime.datetime.combine(date_datefmt, datetime.datetime.min.time())
@@ -622,7 +658,9 @@ def savez_data (data, data_str, start_date, end_date, restart_freq='15d', fld='.
         print(f"Saving {data_str} in {fld}{fn}")
         np.savez(f"{fld}{fn}", np.ma.filled(data, np.nan) if masked else data)
 
-def loadz_data (varname, folder, start_date, end_date, restart_freq='15d', arr_name='arr_0', masked=True):
+def loadz_data (varname, folder, start_date, end_date, restart_freq='15d', arr_name='arr_0', masked=True, slices=(None,None,None,None)):
+    time, lev, lat, lon = slices[0], slices[1], slices[2], slices[3]
+    print(time, lev)
     restart_strformat = get_restart_strformat(restart_freq=restart_freq)
     datad = {}
     fns = glob.glob(folder+f"/{start_date.strftime(restart_strformat)}_{end_date.strftime(restart_strformat)}-*{varname}*.npz")
@@ -631,7 +669,10 @@ def loadz_data (varname, folder, start_date, end_date, restart_freq='15d', arr_n
         with open(fn, 'rb') as f:
             datak = os.path.basename(fn).split('.')[0].split('-')[-1]
             print(datak)
-            datad[datak] = np.ma.masked_invalid(np.load(f)[arr_name]) if masked else np.load(f)[arr_name]
+            if lev and time:
+                datad[datak] = np.ma.masked_invalid(np.load(f)[arr_name][time,lev,:,:]) if masked else np.load(f)[arr_name][time,lev,:,:]
+            else:
+                datad[datak] = np.ma.masked_invalid(np.load(f)[arr_name]) if masked else np.load(f)[arr_name]
     return datad
 
 def savez_mean_fields (savez_fld, varname, fn_d, grid, freq, full_start_date, full_end_date, start_date, end_date,
@@ -646,10 +687,13 @@ def savez_mean_fields (savez_fld, varname, fn_d, grid, freq, full_start_date, fu
         savez_data(m, f"{varname}_{dsname}_{freq}mean", start_date, end_date, restart_freq=restart_freq, fld=savez_fld, masked=masked)
     return means_d
 
-def loadz_mean_fields (varname, loadz_fld, exp_list, freq, start_date, end_date, restart_freq='15d', masked=True):
-    data_d = loadz_data(f"{varname}*{freq}", loadz_fld, start_date, end_date, restart_freq=restart_freq, masked=masked)
+def loadz_mean_fields (varname, loadz_fld, exp_list, freq, start_date, end_date, restart_freq='15d', masked=True, slices=(None,None,None,None)):
+    data_d = loadz_data(f"{varname}*{freq}", loadz_fld, start_date, end_date, restart_freq=restart_freq, masked=masked, slices=slices)
     means_d = {}
-    for e in exp_list:
-        means_d[e] = data_d[f"{varname}_{e}_{freq}mean"]
+    if type(exp_list) == list:
+        for e in exp_list:
+            means_d[e] = data_d[f"{varname}_{e}_{freq}mean"]
+    else:
+        means_d[exp_list] = data_d[f"{varname}_{freq}mean"]
     return means_d
     
