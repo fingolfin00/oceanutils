@@ -51,8 +51,8 @@ def plot_lonlat (ds, var, var_name, level, keep_var_dim=False, savefig_fn=None, 
 
     contour_neg_ls = 'solid'
     if method == 'pcolor':
-            cs = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
-    elif method == 'contour' or method == 'filled_contour':
+            pc = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
+    elif method == 'contour' or method == 'filled_contour' or method == 'contour_pcolor':
         if fmt is None:
             def fmt(x):
                 return f"{-x:.1f}"[:-2]
@@ -66,15 +66,13 @@ def plot_lonlat (ds, var, var_name, level, keep_var_dim=False, savefig_fn=None, 
             cl = ax.clabel(cs, cs.levels[:-1], fmt=fmt, fontsize=10)
         # ax.set_bad(contour_facecolor)
         if method == 'filled_contour':
-            cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, extend=extend, cmap=cmap, alpha=1)
-            ax.set_facecolor(contour_facecolor)
+            csf = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, extend=extend, cmap=cmap, alpha=1)
     elif method == 'contourf':
-        cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, extend=extend, cmap=cmap, alpha=1)
-        ax.set_facecolor(contour_facecolor)
+        csf = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels, extend=extend, cmap=cmap, alpha=1)
     else:
         print(f"Method {method} not supported")
         return
-
+    ax.set_facecolor(contour_facecolor)
     # cs = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
 
     point_lat_i, point_lon_i = ou.get_idx_from_lat(point_coords[0], ds) if point_coords[0] else point_idx[0], ou.get_idx_from_lon(point_coords[1], ds) if point_coords[1] else point_idx[1]
@@ -160,8 +158,8 @@ def plot_2d (ds, var, var_name, savefig_fn=None, savefig_resfac=1, hres=24, vres
 
     contour_neg_ls = 'solid'
     if method == 'pcolor':
-        cs = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=norm, cmap=cmap, alpha=1)
-    elif method == 'contour' or method == 'filled_contour':
+        pc = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=norm, cmap=cmap, alpha=1)
+    elif method == 'contour' or method == 'filled_contour' or method == 'contour_pcolor':
         if fmt is None:
             def fmt(x):
                 return f"{-x:.1f}"[:-2]
@@ -176,15 +174,15 @@ def plot_2d (ds, var, var_name, savefig_fn=None, savefig_resfac=1, hres=24, vres
                 cl = ax.clabel(cs, cs.levels[:-1], fmt=fmt, fontsize=10)
         # ax.set_bad(contour_facecolor)
         if method == 'filled_contour':
-            cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
-            ax.set_facecolor(contour_facecolor)
+            csf = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
+        if method == 'contour_pcolor':
+            pc = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=norm, cmap=cmap, alpha=1)
     elif method == 'contourf':
-        cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
-        ax.set_facecolor(contour_facecolor)
+        csf = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
     else:
         print(f"Method {method} not supported")
         return
-
+    ax.set_facecolor(contour_facecolor)
     for j, point_coords in enumerate(points_coords):
         if point_coords[0] and point_coords[1]:
             point_lat_i, point_lon_i = ou.get_idx_in_arr(point_coords[0], PLT_LAT[:,0]), ou.get_idx_in_arr(point_coords[1], PLT_LON[0,:])
@@ -227,12 +225,16 @@ def plot_2d (ds, var, var_name, savefig_fn=None, savefig_resfac=1, hres=24, vres
                 ax.annotate(f"({point_lat:.2f}, {point_lon:.2f})", (PLT_LON[point_lat_i,point_lon_i], PLT_LAT[point_lat_i,point_lon_i]), xytext=(4,4), textcoords='offset points')
 
     if cbar:
+        if method == 'contourf' or method == 'filled_contour':
+            e = csf
+        elif method == 'pcolor' or method == 'contour_pcolor':
+            e = pc
         divider = make_axes_locatable(ax)
         cax = divider.append_axes(cbar_loc, size="2%", pad=0.05)
         # cbar_ticks_num = contourf_levs+2 if method=='contourf' or method=='contour' or method=='filled_contour' else cbar_ticks_num
         # print(cbar_ticks_num)
         ticks = tick.FixedLocator(contour_step_level) if type(contour_step_level)==list else tick.LinearLocator(numticks=cbar_ticks_num)
-        cb = fig.colorbar(cs, cax=cax, ticks=ticks)
+        cb = fig.colorbar(e, cax=cax, ticks=ticks)
         cb.ax.set_title(cbar_title, fontsize=8)
 
     if adjust_plt : ax.set_aspect('equal', adjustable='box')
@@ -284,13 +286,16 @@ def plot_lonlev (ds, var, var_name, lat_i, keep_var_dim=False, savefig_fn=None, 
 
     if type(contour_step_level) == list:
         levels = contour_step_level
+        ncolors = len(contour_step_level)*contour_color_factor if contour_color_factor else len(contour_step_level)
+        norm = BoundaryNorm(contour_step_level, ncolors)
     else:
         levels = np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level)
+        norm = TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt)
 
     contour_neg_ls = 'solid'
     if method == 'pcolor':
-            cs = ax.pcolormesh(PLT_LON, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
-    elif method == 'contour' or method == 'filled_contour':
+            pc = ax.pcolormesh(PLT_LON, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
+    elif method == 'contour' or method == 'filled_contour' or method == 'contour_pcolor':
         if fmt is None:
             def fmt(x):
                 return f"{-x:.1f}"[:-2]
@@ -306,17 +311,17 @@ def plot_lonlev (ds, var, var_name, lat_i, keep_var_dim=False, savefig_fn=None, 
             cl = ax.clabel(cs, cs.levels[:-1], fmt=fmt, fontsize=10)
         # ax.set_bad(contour_facecolor)
         if method == 'filled_contour':
-            cs = ax.contourf(PLT_LON, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
+            csf = ax.contourf(PLT_LON, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
                              extend=extend, levels=levels, cmap=cmap, alpha=1)
-            ax.set_facecolor(contour_facecolor)
+        if method == 'contour_pcolor':
+            pc = ax.pcolormesh(PLT_LON, PLT_LEV, var_plt, norm=norm, cmap=cmap, alpha=1)
     elif method == 'contourf':
-        cs = ax.contourf(PLT_LON, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
+        csf = ax.contourf(PLT_LON, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
                          extend=extend, levels=levels, cmap=cmap, alpha=1)
-        ax.set_facecolor(contour_facecolor)
     else:
         print(f"Method {method} not supported")
         return
-
+    ax.set_facecolor(contour_facecolor)
     # ax.set_yscale('log')
     point_lon_i, point_lev_i = ou.get_idx_from_lon(point_coords[0], ds) if point_coords[0] else point_idx[0], ou.get_idx_from_lev(point_coords[1], ds) if point_coords[1] else point_idx[1]
     point_lon, point_lev = ou.get_lon_from_idx(point_idx[1], ds) if point_idx[1] else point_coords[1], ou.get_lev_from_idx(point_idx[0], ds) if point_idx[0] else point_coords[0]
@@ -326,11 +331,15 @@ def plot_lonlev (ds, var, var_name, lat_i, keep_var_dim=False, savefig_fn=None, 
         ax.annotate(f"({point_lon:.2f}, {point_lev:.2f})", (PLT_LON[point_lon_i,point_lev_i], PLT_LEV[point_lon_i,point_lev_i]), xytext=(4,4), textcoords='offset points')
 
     if cbar:
+        if method == 'contourf' or method == 'filled_contour':
+            e = csf
+        elif method == 'pcolor' or method == 'contour_pcolor':
+            e = pc
         divider = make_axes_locatable(ax)
         cax = divider.append_axes(cbar_loc, size="2%", pad=0.05)
         # cbar_ticks_num = contourf_levs+2 if method=='contourf' or method=='contour' or method=='filled_contour' else cbar_ticks_num
         # print(cbar_ticks_num)
-        cb = fig.colorbar(cs, cax=cax, ticks=tick.LinearLocator(numticks=cbar_ticks_num))
+        cb = fig.colorbar(e, cax=cax, ticks=tick.LinearLocator(numticks=cbar_ticks_num))
         cb.ax.set_title(cbar_title, fontsize=8)
     # ax.set_facecolor('gray')
 
@@ -350,7 +359,13 @@ def plot_lonlev (ds, var, var_name, lat_i, keep_var_dim=False, savefig_fn=None, 
         plt.close()
     else:
         plt.show()
-    return cs
+    if method == 'contourf' or method == 'filled_contour':
+        e = csf
+    elif method == 'pcolor' or method == 'contour_pcolor':
+        e = pc
+    else:
+        e = cs
+    return e
 
 
 def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h', keep_var_dim=False, method='pcolor', fmt=None,
@@ -388,8 +403,8 @@ def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h',
 
     contour_neg_ls = 'solid'
     if method == 'pcolor':
-            cs = ax.pcolormesh(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
-    elif method == 'contour' or method == 'filled_contour':
+            pc = ax.pcolormesh(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
+    elif method == 'contour' or method == 'filled_contour' or method == 'contour_pcolor':
         if fmt is None:
             def fmt(x):
                 return f"{-x:.1f}"[:-2]
@@ -405,17 +420,17 @@ def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h',
             cl = ax.clabel(cs, cs.levels[:-1], fmt=fmt, fontsize=10)
         # ax.set_bad(contour_facecolor)
         if method == 'filled_contour':
-            cs = ax.contourf(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
+            csf = ax.contourf(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
                              extend=extend, levels=levels, cmap=cmap, alpha=1)
-            ax.set_facecolor(contour_facecolor)
+        if method == 'contour_pcolor':
+            pc = ax.pcolormesh(PLT_TIM, PLT_LEV, var_plt, norm=norm, cmap=cmap, alpha=1)
     elif method == 'contourf':
-        cs = ax.contourf(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
+        csf = ax.contourf(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
                          extend=extend, levels=levels, cmap=cmap, alpha=1)
-        ax.set_facecolor(contour_facecolor)
     else:
         print(f"Method {method} not supported")
         return
-    
+    ax.set_facecolor(contour_facecolor)
     # cs = ax.pcolormesh(PLT_TIM, PLT_LEV, np.swapaxes(var_plt,0,1),
     #                    norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
     #                    # norm=LogNorm(vmin=vmin_plt, vmax=vmax_plt),
@@ -429,6 +444,10 @@ def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h',
         ax.annotate(f"({point_time:.2f}, {point_lev:.2f})", (PLT_LON[point_time_i,point_lev_i], PLT_LEV[point_time_i,point_lev_i]), xytext=(4,4), textcoords='offset points')
 
     if cbar:
+        if method == 'contourf' or method == 'filled_contour':
+            e = csf
+        elif method == 'pcolor' or method == 'contour_pcolor':
+            e = pc
         divider = make_axes_locatable(ax)
         cax = divider.append_axes(cbar_loc, size="2%", pad=0.05)
         # cbar_ticks_num = contourf_levs+2 if method=='contourf' or method=='contour' or method=='filled_contour' else cbar_ticks_num
@@ -605,9 +624,8 @@ def plot_2d_ax (
 
     contour_neg_ls = 'solid'
     if method == 'pcolor':
-        cs = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=norm, cmap=cmap, alpha=1)
-        ax.set_facecolor(contour_facecolor)
-    elif method == 'contour' or method == 'filled_contour':
+        pc = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=norm, cmap=cmap, alpha=1)
+    elif method == 'contour' or method == 'filled_contour' or method == 'contour_pcolor':
         if contour_label_fmt is None:
             def contour_label_fmt(x):
                 return f"{-x:.1f}"[:-2]
@@ -622,15 +640,15 @@ def plot_2d_ax (
                 cl = ax.clabel(cs, cs.levels[:-1], fmt=contour_label_fmt, fontsize=10)
         # ax.set_bad(contour_facecolor)
         if method == 'filled_contour':
-            cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
-            ax.set_facecolor(contour_facecolor)
+            csf = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
+        if method == 'contour_pcolor':
+            pc = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=norm, cmap=cmap, alpha=1)
     elif method == 'contourf':
-        cs = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
-        ax.set_facecolor(contour_facecolor)
+        csf = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
     else:
         print(f"Method {method} not supported")
         return
-
+    ax.set_facecolor(contour_facecolor)
     if quiver:
         u_quiver = quiver['u'][lat0_i:latf_i,lon0_i:lonf_i]
         v_quiver = quiver['v'][lat0_i:latf_i,lon0_i:lonf_i]
@@ -697,6 +715,10 @@ def plot_2d_ax (
     if adjust_plt : ax.set_aspect('equal', adjustable='box')
     ax.set_xlabel("lon")
     ax.set_ylabel("lat")
-
-    return cs
-
+    if method == 'contourf' or method == 'filled_contour':
+        e = csf
+    elif method == 'pcolor' or method == 'contour_pcolor':
+        e = pc
+    else:
+        e = cs
+    return e
