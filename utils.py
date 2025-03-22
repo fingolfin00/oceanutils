@@ -61,7 +61,7 @@ def create_lonspace (ds):
         # print(2)
         # print(ds.variables[lon_key][40,:])
         # return np.linspace(ds.variables[lon_key][0,0], ds.variables[lon_key][0,-1], np.shape(ds.variables[lon_key])[1])
-        return ds.variables[lon_key][40,:]
+        return ds.variables[lon_key][0,:]
     elif len(np.shape(ds.variables[lon_key])) == 1:
         # print(1)
         # print(ds.variables[lon_key][:])
