@@ -260,50 +260,12 @@ def down_sample(x, f=7):
     # reshape, so each chunk gets its own row, and then take mean
     return np.ma.mean(xp.reshape(-1, f), axis=-1)
 
-def get_restart_strformat (restart_freq):
-    if 'd' in restart_freq:
-        return "%Y%m%d"
-    elif 'm' in restart_freq: # untested
-        return "%Y%m"
-    else:
-        print(f"Restart freq {restart_freq} not supported")
-        return None
-
-def get_ncfiles (exp_name, start_date, end_date, workpath, recursive=False, datapoint_freq='6h', restart_freq='15d', save_freq='1m'):
-    print(workpath)
-    glob_star = r'/**/' if recursive else r'*/*'
-    if save_freq=='1m':
-        save_strformat = "%Y%m"
-        save_delta = dateutil.relativedelta.relativedelta(months=+1)
-    else:
-        print(f"Not supported save freq format. {save_freq}")
-        return
-    grids = ["T", "U", "V", "W"]
-    restart_strformat = get_restart_strformat(restart_freq=restart_freq)
-    #restart_dates = [single_date for single_date in daterange(start_date, end_date, restart_days)]
-    restart_dates = pd.date_range(start=start_date, end=end_date, freq=restart_freq).to_pydatetime().tolist()
-    fn = {g: {} for g in grids}
-    for i in range(len(restart_dates[:-1])):
-        d_start = restart_dates[:-1][i]
-        d_end = restart_dates[1:][i] - datetime.timedelta(days=1)
-        # d_end = restart_dates[1:][i]
-        # dates = [f"{d.strftime(save_strformat)}-{(d+save_delta).strftime(save_strformat)}" for d in pd.date_range(start=d_start, end=d_end, freq=datapoint_freq).to_pydatetime().tolist()]
-        d_save = f"{d_start.strftime(save_strformat)}-{(d_start+save_delta).strftime(save_strformat)}"
-        d_restart = f"{d_start.strftime(restart_strformat)}_{d_end.strftime(restart_strformat)}"
-        # for d in dates:
-        for g in grids:
-            # search_str = f"{exp_name}_{datapoint_freq}_{d_start.strftime(restart_strformat)}_{d_end.strftime(restart_strformat)}_grid_{g}_{d_save}.nc"
-            search_str = f"{exp_name}_{datapoint_freq}_{d_start.strftime(restart_strformat)}_{d_end.strftime(restart_strformat)}_grid_{g}_*.nc"
-            print(search_str)
-            # fn[g][d_restart] = glob.glob(workpath+r"*/"+search_str)
-            fn[g][d_restart] = glob.glob(workpath+glob_star+search_str)
-    return fn
-
 def get_scale_factor (domds, grid, var, zoom_coords=((None,None),(None,None),(None,None))): # lev, lat, lon
     lev0_i, levf_i = get_idx_from_lev(zoom_coords[0][0], domds) if zoom_coords[0][0] else None, get_idx_from_lev(zoom_coords[0][1], domds) if zoom_coords[0][1] else None
     lat0_i, latf_i = get_idx_from_lat(zoom_coords[1][0], domds) if zoom_coords[1][0] else None, get_idx_from_lat(zoom_coords[1][1], domds) if zoom_coords[1][1] else None
     lon0_i, lonf_i = get_idx_from_lon(zoom_coords[2][0], domds) if zoom_coords[2][0] else None, get_idx_from_lon(zoom_coords[2][1], domds) if zoom_coords[2][1] else None
-    # print(lev0_i, levf_i, lat0_i, latf_i, lon0_i, lonf_i)
+    print(lev0_i, levf_i, lat0_i, latf_i, lon0_i, lonf_i)
+    print(np.shape(var))
     e1 = np.repeat([np.repeat([domds.variables['e1'+grid.lower()][0,lat0_i:latf_i,lon0_i:lonf_i]], len(create_levspace(domds)[lev0_i:levf_i]), axis=0)], np.shape(var)[0], axis=0)
     e2 = np.repeat([np.repeat([domds.variables['e2'+grid.lower()][0,lat0_i:latf_i,lon0_i:lonf_i]], len(create_levspace(domds)[lev0_i:levf_i]), axis=0)], np.shape(var)[0], axis=0)
     e3 = np.repeat([domds.variables['e3'+grid.lower()+'_0'][0,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i]], np.shape(var)[0], axis=0)
@@ -370,11 +332,11 @@ def get_zonal_inflow (u, e2u, e3u, units='sverdrup'):
 
 def get_zonal_inflow_tracer (u, tracer, e2t, e3t):
     mask = u>0
-    return np.ma.sum(tracer*e2t*e3t, axis=(1,2,3)) / np.ma.sum(e2t*e3t, axis=(1,2,3))
+    return np.ma.sum(tracer*e2t*e3t*mask, axis=(1,2,3)) / np.ma.sum(e2t*e3t*mask, axis=(1,2,3))
 
 def get_zonal_outlow_tracer (u, tracer, e2t, e3t):
     mask = u<0
-    return np.ma.sum(tracer*e2t*e3t, axis=(1,2,3)) / np.ma.sum(e2t*e3t, axis=(1,2,3))
+    return np.ma.sum(tracer*e2t*e3t*mask, axis=(1,2,3)) / np.ma.sum(e2t*e3t*mask, axis=(1,2,3))
 
 def get_change_sign (arr):
     return (np.ma.diff(np.sign(arr)) > 0)*1 + (np.ma.diff(np.sign(arr)) < 0)*(-1)
@@ -528,8 +490,9 @@ def get_full_period (varname, fnds, domds,
                     if end_date <= full_restart_dates[i]:
                         # print(full_restart_dates[i-1], end_date)
                         var_end_idx = from_date_to_idx(full_restart_dates[i-1], end_date, freq=save_freq)+1 if end_date < full_restart_dates[i] else None
-                        print('end idx: ',var_end_idx)
-                        # print(end_date)
+                        print(i, k, f"last var")
+                        print('end idx:', var_end_idx)
+                        print('end date:', end_date)
                         # print(i, k, "append last var")
                         if vardim == '3d':
                             var = np.ma.append(var, ds.variables[varname][:var_end_idx,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i], axis=0)
@@ -540,7 +503,7 @@ def get_full_period (varname, fnds, domds,
                         # print(np.shape(var))
                         return var
                     else:
-                        # print(i, k, f"append var")
+                        print(i, k, f"append var")
                         if vardim == '3d':
                             var = np.ma.append(var, ds.variables[varname][:,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i], axis=0)
                         elif vardim == '2d':
@@ -553,14 +516,14 @@ def get_full_period (varname, fnds, domds,
                     # print(full_restart_dates[i-1])
                     # print(full_restart_dates[i])
                     var_start_idx = from_date_to_idx(full_restart_dates[i-1], start_date, freq=save_freq) if start_date < full_restart_dates[i] else None
-                    # print('start date:',start_date)
+                    print('start date:',start_date)
                     print('start idx:',var_start_idx)
                     # handle interval within a single ds
                     if end_date <= full_restart_dates[i]:
                         var_end_idx = from_date_to_idx(full_restart_dates[i-1], end_date, freq=save_freq)+1 if end_date < full_restart_dates[i] else None
                         print('end idx:',var_end_idx)
-                        # print('end date:',end_date)
-                        # print(i, k, "single ds")
+                        print('end date:',end_date)
+                        print(i, k, "single ds")
                         if vardim == '3d':
                             var = ds.variables[varname][var_start_idx:var_end_idx,lev0_i:levf_i,lat0_i:latf_i,lon0_i:lonf_i]
                         elif vardim == '2d':
@@ -614,8 +577,8 @@ def get_restart_strformat (restart_freq):
         print(f"Restart freq {restart_freq} not supported")
         return None
 
-def get_ncfiles (exp_name, start_date, end_date, workpath, recursive=False, datapoint_freq='6h', restart_freq='15d', save_freq='1m'):
-    # print(workpath)
+def get_ncfiles (exp_name, start_date, end_date, workpath, nemo=True, sep='_', key_period=True, enddate_fixed=None, recursive=False, datapoint_freq='6h', restart_freq='15d', save_freq='1m'):
+    print(workpath)
     glob_star = r'/**/' if recursive else r'*/*'
     if save_freq=='1m':
         save_strformat = "%Y%m"
@@ -627,27 +590,43 @@ def get_ncfiles (exp_name, start_date, end_date, workpath, recursive=False, data
     restart_strformat = get_restart_strformat(restart_freq=restart_freq)
     #restart_dates = [single_date for single_date in daterange(start_date, end_date, restart_days)]
     restart_dates = pd.date_range(start=start_date, end=end_date, freq=restart_freq).to_pydatetime().tolist()
-    fn = {g: {} for g in grids}
-    for i in range(len(restart_dates[:-1])):
-        d_start = restart_dates[:-1][i]
-        d_end = restart_dates[1:][i] - datetime.timedelta(days=1)
-        # d_end = restart_dates[1:][i]
-        # dates = [f"{d.strftime(save_strformat)}-{(d+save_delta).strftime(save_strformat)}" for d in pd.date_range(start=d_start, end=d_end, freq=datapoint_freq).to_pydatetime().tolist()]
-        d_save = f"{d_start.strftime(save_strformat)}-{(d_start+save_delta).strftime(save_strformat)}"
-        d_restart = f"{d_start.strftime(restart_strformat)}_{d_end.strftime(restart_strformat)}"
-        # for d in dates:
-        for g in grids:
-            # search_str = f"{exp_name}_{datapoint_freq}_{d_start.strftime(restart_strformat)}_{d_end.strftime(restart_strformat)}_grid_{g}_{d_save}.nc"
-            search_str = f"{exp_name}_{datapoint_freq}_{d_restart}_grid_{g}_*.nc"
-            # print(search_str)
-            # fn[g][d_restart] = glob.glob(workpath+r"*/"+search_str)
-            fn[g][d_restart] = glob.glob(workpath+glob_star+search_str)
-    last_d_end = datetime.datetime.combine(end_date, datetime.datetime.min.time()) - datetime.timedelta(days=1)
-    if last_d_end > restart_dates[-1]:
-        last_restart = f"{restart_dates[-1].strftime(restart_strformat)}_{last_d_end.strftime(restart_strformat)}"
-        for g in grids:
-            last_search_str = f"{exp_name}_{datapoint_freq}_{last_restart}_grid_{g}_*.nc"
-            fn[g][last_restart] = glob.glob(workpath+glob_star+last_search_str)
+    if nemo:
+        fn = {g: {} for g in grids}
+        for i in range(len(restart_dates[:-1])):
+            d_start = restart_dates[:-1][i]
+            d_end = restart_dates[1:][i] - datetime.timedelta(days=1)
+            # d_end = restart_dates[1:][i]
+            # dates = [f"{d.strftime(save_strformat)}-{(d+save_delta).strftime(save_strformat)}" for d in pd.date_range(start=d_start, end=d_end, freq=datapoint_freq).to_pydatetime().tolist()]
+            d_save = f"{d_start.strftime(save_strformat)}-{(d_start+save_delta).strftime(save_strformat)}"
+            d_restart = f"{d_start.strftime(restart_strformat)}_{d_end.strftime(restart_strformat)}"
+            # for d in dates:
+            for g in grids:
+                # search_str = f"{exp_name}_{datapoint_freq}_{d_start.strftime(restart_strformat)}_{d_end.strftime(restart_strformat)}_grid_{g}_{d_save}.nc"
+                search_str = f"{exp_name}_{datapoint_freq}_{d_restart}_grid_{g}_*.nc"
+                # print(search_str)
+                # fn[g][d_restart] = glob.glob(workpath+r"*/"+search_str)
+                fn[g][d_restart] = glob.glob(workpath+glob_star+search_str)
+        last_d_end = datetime.datetime.combine(end_date, datetime.datetime.min.time()) - datetime.timedelta(days=1)
+        if last_d_end > restart_dates[-1]:
+            last_restart = f"{restart_dates[-1].strftime(restart_strformat)}_{last_d_end.strftime(restart_strformat)}"
+            for g in grids:
+                last_search_str = f"{exp_name}_{datapoint_freq}_{last_restart}_grid_{g}_*.nc"
+                fn[g][last_restart] = glob.glob(workpath+glob_star+last_search_str)
+    else:
+        # d_restart = f"{start_date.strftime(restart_strformat)}{sep}{end_date.strftime(restart_strformat)}"
+        fn = {}
+        for i in range(len(restart_dates[:-1])):
+            d_start = restart_dates[:-1][i]
+            d_end = enddate_fixed if enddate_fixed else restart_dates[1:][i] - datetime.timedelta(days=1)
+            # print(d_start, d_end)
+            d_restart = f"{d_start.strftime(restart_strformat)}{sep}{d_end.strftime(restart_strformat)}"
+            # print(d_restart)
+            search_str = f"{exp_name}{sep}{d_restart}.nc"
+            # print(workpath+glob_star+search_str)
+            if key_period:
+                fn[d_restart] = glob.glob(workpath+glob_star+search_str, recursive=recursive)
+            else:
+                fn[d_start.strftime(restart_strformat)] = glob.glob(workpath+glob_star+search_str, recursive=recursive)
     return fn
 
 def savez_data (data, data_str, start_date, end_date, restart_freq='15d', fld='./', masked=True):
@@ -660,12 +639,12 @@ def savez_data (data, data_str, start_date, end_date, restart_freq='15d', fld='.
 
 def loadz_data (varname, folder, start_date, end_date, restart_freq='15d', arr_name='arr_0', masked=True, slices=(None,None,None,None)):
     time, lev, lat, lon = slices[0], slices[1], slices[2], slices[3]
-    print(time, lev)
+    # print(time, lev)
     restart_strformat = get_restart_strformat(restart_freq=restart_freq)
     datad = {}
     fns = glob.glob(folder+f"/{start_date.strftime(restart_strformat)}_{end_date.strftime(restart_strformat)}-*{varname}*.npz")
     for fn in fns:
-        # print(fn)
+        print(fn)
         with open(fn, 'rb') as f:
             datak = os.path.basename(fn).split('.')[0].split('-')[-1]
             print(datak)
