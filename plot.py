@@ -259,7 +259,8 @@ def plot_lonlev (ds, var, var_name, lat_i, keep_var_dim=False, savefig_fn=None, 
                  lev_factor=1, adjust_plt=False, add_lat_str=False, vmin=None, vmax=None, extend='neither', method='pcolor',
                  contour_step_level=100, contour_facecolor='grey', contour_lev_col=None, contour_zero_lev_label=False, fmt=None,
                  zoom_idx=((None,None), (None,None)), zoom_coords=((None,None), (None,None)), add_zoomstr_title=False, cbar=True, cbar_loc='right',
-                 cbar_ticks_num=10, cbar_title='', cmap='jet', mask=None, point_idx=(None,None), point_coords=(None,None), point_clr='ko', noiplot=False):
+                 cbar_ticks_num=10, cbar_title='', cmap='jet', mask=None, point_idx=(None,None), point_coords=(None,None), point_clr='ko', noiplot=False,
+points_idx=[(None,None)], points_coords=[(None,None)], points_clr=['ko'], points_coords_ann=[None], points_idx_ann=[None], points_coords_ann_opts=[None], points_idx_ann_opts=[None]):
     
     lev0_i, levf_i = ou.get_idx_from_lev(zoom_coords[0][0], ds) if zoom_coords[0][0] else zoom_idx[0][0], ou.get_idx_from_lev(zoom_coords[0][1], ds) if zoom_coords[0][1] else zoom_idx[0][1]
     lon0_i, lonf_i = ou.get_idx_from_lon(zoom_coords[1][0], ds) if zoom_coords[1][0] else zoom_idx[1][0], ou.get_idx_from_lon(zoom_coords[1][1], ds) if zoom_coords[1][1] else zoom_idx[1][1]
@@ -322,6 +323,47 @@ def plot_lonlev (ds, var, var_name, lat_i, keep_var_dim=False, savefig_fn=None, 
         print(f"Method {method} not supported")
         return
     ax.set_facecolor(contour_facecolor)
+
+    for j, point_coords in enumerate(points_coords):
+        if point_coords[0] and point_coords[1]:
+            point_lev_i, point_lon_i = ou.get_idx_in_arr(point_coords[0], PLT_LEV[:,0]), ou.get_idx_in_arr(point_coords[1], PLT_LON[0,:])
+            point_lev, point_lon = PLT_LEV[point_lev_i, 0], PLT_LON[0, point_lon_i]
+            ax.plot(PLT_LON[point_lev_i,point_lon_i], PLT_LEV[point_lev_i,point_lev_i], points_clr[j])
+            if points_coords_ann[j]:
+                if points_coords_ann_opts[j]:
+                    xytext = points_coords_ann_opts[j]['xytext']
+                    bbox_d = points_coords_ann_opts[j]['bbox_d']
+                    fontsize = points_coords_ann_opts[j]['fontsize']
+                    weight = points_coords_ann_opts[j]['weight']
+                    color = points_coords_ann_opts[j]['color']
+                else:
+                    xytext = (7,7)
+                    bbox_d = dict(boxstyle="round", fc="w", alpha=0.4)
+                    fontsize = 12
+                    weight = 'bold'
+                    color = 'black'
+                ax.annotate(points_coords_ann[j], (PLT_LON[point_lev_i,point_lon_i], PLT_LEV[point_lev_i,point_lon_i]), xytext=xytext, textcoords='offset points', bbox=bbox_d, fontsize=fontsize, weight=weight, color=color)
+            else:
+                ax.annotate(f"({point_lat:.2f}, {point_lon:.2f})", (PLT_LON[point_lev_i,point_lon_i], PLT_LEV[point_lev_i,point_lon_i]), xytext=(4,4), textcoords='offset points')
+    for j, point_idx in enumerate(points_idx):
+        if point_idx[0] and point_idx[1]:
+            point_lev_i, point_lon_i = point_idx[0], point_idx[1]
+            point_lev, point_lon = PLT_LEV[point_lev_i, 0], PLT_LON[0, point_lon_i]
+            ax.plot(PLT_LON[point_lev_i,point_lon_i], PLT_LEV[point_lev_i,point_lon_i], points_clr[j])
+            if points_idx_ann[j]:
+                if points_idx_ann_opts[j]:
+                    xytext = points_idx_ann_opts[j]['xytext']
+                    bbox_d = points_idx_ann_opts[j]['bbox_d']
+                    fontsize = points_idx_ann_opts[j]['fontsize']
+                    weight = points_idx_ann_opts[j]['weight']
+                else:
+                    xytext = (7,7)
+                    bbox_d = dict(boxstyle="round", fc="w", alpha=0.4)
+                    fontsize = 12
+                    weight = 'bold'
+                ax.annotate(points_coords_ann[j], (PLT_LON[point_lev_i,point_lon_i], PLT_LEV[point_lev_i,point_lon_i]), xytext=xytext, textcoords='offset points', bbox=bbox_d, fontsize=fontsize, weight=weight)
+            else:
+                ax.annotate(f"({point_lev:.2f}, {point_lon:.2f})", (PLT_LON[point_lev_i,point_lon_i], PLT_LEV[point_lev_i,point_lon_i]), xytext=(4,4), textcoords='offset points')
     # ax.set_yscale('log')
     point_lon_i, point_lev_i = ou.get_idx_from_lon(point_coords[0], ds) if point_coords[0] else point_idx[0], ou.get_idx_from_lev(point_coords[1], ds) if point_coords[1] else point_idx[1]
     point_lon, point_lev = ou.get_lon_from_idx(point_idx[1], ds) if point_idx[1] else point_coords[1], ou.get_lev_from_idx(point_idx[0], ds) if point_idx[0] else point_coords[0]
@@ -379,7 +421,7 @@ def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h',
     lev0_i, levf_i = ou.get_idx_from_lev(zoom_coords[0][0], ds) if zoom_coords[0][0] else zoom_idx[0][0], ou.get_idx_from_lev(zoom_coords[0][1], ds) if zoom_coords[0][1] else zoom_idx[0][1]
     # lon0_i, lonf_i = ou.get_idx_from_lon(zoom_coords[1][0], ds) if zoom_coords[1][0] else zoom_idx[1][0], ou.get_idx_from_lon(zoom_coords[1][1], ds) if zoom_coords[1][1] else zoom_idx[1][1]
     # print(lev0_i, levf_i)
-    restart_dates = pd.date_range(start=start_date, end=end_date, freq=restart_freq).to_pydatetime().tolist()[:-1]
+    restart_dates = pd.date_range(start=start_date, end=end_date, freq=restart_freq).to_pydatetime().tolist()
     # restart_dates = np.arange(np.shape(var)[0])
     start_date, end_date = ou.from_date_to_datetime(start_date), ou.from_date_to_datetime(end_date)
     
@@ -452,7 +494,7 @@ def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h',
         cax = divider.append_axes(cbar_loc, size="2%", pad=0.05)
         # cbar_ticks_num = contourf_levs+2 if method=='contourf' or method=='contour' or method=='filled_contour' else cbar_ticks_num
         # print(cbar_ticks_num)
-        cb = fig.colorbar(cs, cax=cax, ticks=tick.LinearLocator(numticks=cbar_ticks_num))
+        cb = fig.colorbar(e, cax=cax, ticks=tick.LinearLocator(numticks=cbar_ticks_num))
         cb.ax.set_title(cbar_title, fontsize=8)
     # ax.set_facecolor('gray')
 
