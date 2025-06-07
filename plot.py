@@ -734,11 +734,11 @@ def create_cbar (fig, ax, cs, cbar_ticks_num=10, cbar_loc='right', cbar_title=''
     cb.ax.set_title(cbar_title, fontsize=8)
 
 def plot_2d_ax (
-    ds, var, ax, method='pcolor', keep_var_dim=False, anomaly=False, strides=None, mask=None, vmin=None, vmax=None,
+    ds, var, ax, lonlat=None, method='pcolor', keep_var_dim=False, anomaly=False, strides=None, mask=None, vmin=None, vmax=None,
     adjust_plt=False, extend='neither', cmap='jet', quiver=False, stream=False,
     zoom_idx=((None,None), (None,None)), zoom_coords=((None,None), (None,None)),
     contour_step_level=None, contour_facecolor='grey', contour_lev_col=None, contour_zero_lev_label=False, contour_color_factor=None,
-    contour_label_fmt=None, contour_lev_labels=True, contour_linewidths=1.5, contour_linestyles=None,
+    contour_label_fmt=None, contour_lev_labels=True, contour_linewidths=1.5, contour_linestyles=None, contour_edge_resolution=25,
     points_idx=[(None,None)], points_coords=[(None,None)], points_clr=['ko'], points_coords_ann=[None], points_idx_ann=[None], points_coords_ann_opts=[None], points_idx_ann_opts=[None]
 ):
     
@@ -753,7 +753,10 @@ def plot_2d_ax (
     if anomaly:
         var_plt = var_plt-np.ma.mean(var_plt)
     
-    PLT_LON, PLT_LAT = np.meshgrid(ou.create_lonspace(ds)[lon0_i:lonf_i], ou.create_latspace(ds)[lat0_i:latf_i])
+    if lonlat:
+        PLT_LON, PLT_LAT = lonlat[0], lonlat[1]
+    else:
+        PLT_LON, PLT_LAT = np.meshgrid(ou.create_lonspace(ds)[lon0_i:lonf_i], ou.create_latspace(ds)[lat0_i:latf_i])
 
     if strides:
         var_plt = var_plt[::strides,::strides]
@@ -777,14 +780,33 @@ def plot_2d_ax (
     contour_neg_ls = 'solid'
     if method == 'pcolor':
         pc = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=norm, cmap=cmap, alpha=1)
-    elif method == 'contour' or method == 'filled_contour' or method == 'contour_pcolor':
+    elif method == 'contour' or method == 'filled_contour' or method == 'contour_pcolor' or method == 'contour_edge_pcolor':
         if contour_label_fmt is None:
             def contour_label_fmt(x):
                 return f"{-x:.1f}"[:-2]
-        if contour_lev_col:
-            cs = ax.contour(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, negative_linestyles=contour_neg_ls, colors=contour_lev_col, alpha=1, extend=extend, linewidths=contour_linewidths, linestyles=contour_linestyles)
+        if method == 'contour_edge_pcolor':
+            f = lambda x,y: var_plt[int(y),int(x)]
+            g = np.vectorize(f)
+            x = np.linspace(0, var_plt.shape[1], var_plt.shape[0]*contour_edge_resolution)
+            y = np.linspace(0, var_plt.shape[0], var_plt.shape[1]*contour_edge_resolution)
+            X,Y = np.meshgrid(x[:-1],y[:-1])
+            var_plt_contour = g(X,Y)
+            delta_lat = ds.variables[ou.get_lat_var_key(ds)][1][lat0_i]-ds.variables[ou.get_lat_var_key(ds)][0][lat0_i]
+            delta_lon = ds.variables[ou.get_lon_var_key(ds)][lon0_i][1]-ds.variables[ou.get_lon_var_key(ds)][lon0_i][0]
+            plt_lat_contour = np.linspace(ds.variables[ou.get_lat_var_key(ds)][lat0_i][0]-delta_lat/2, ds.variables[ou.get_lat_var_key(ds)][latf_i][0]-delta_lat/2, var_plt.shape[1]*contour_edge_resolution)
+            plt_lon_contour = np.linspace(ds.variables[ou.get_lon_var_key(ds)][0][lon0_i]-delta_lon/2, ds.variables[ou.get_lon_var_key(ds)][0][lonf_i]-delta_lon/2, var_plt.shape[0]*contour_edge_resolution)
+            PLT_LON_CONTOUR, PLT_LAT_CONTOUR = np.meshgrid(plt_lon_contour[:-1], plt_lat_contour[:-1])
         else:
-            cs = ax.contour(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, negative_linestyles=contour_neg_ls, cmap=cmap, alpha=1, extend=extend, linewidths=contour_linewidths, linestyles=contour_linestyles)
+            var_plt_contour = var_plt
+            PLT_LON_CONTOUR, PLT_LAT_CONTOUR = PLT_LON, PLT_LAT
+        if contour_lev_col:
+            cs = ax.contour(
+                PLT_LON_CONTOUR, PLT_LAT_CONTOUR, var_plt_contour, norm=norm, levels=levels, negative_linestyles=contour_neg_ls,
+                colors=contour_lev_col, alpha=1, extend=extend, linewidths=contour_linewidths, linestyles=contour_linestyles)
+        else:
+            cs = ax.contour(
+                PLT_LON_CONTOUR, PLT_LAT_CONTOUR, var_plt_contour, norm=norm, levels=levels, negative_linestyles=contour_neg_ls,
+                cmap=cmap, alpha=1, extend=extend, linewidths=contour_linewidths, linestyles=contour_linestyles)
         if contour_lev_labels:
             if contour_zero_lev_label:
                 cl = ax.clabel(cs, cs.levels, fmt=contour_label_fmt, fontsize=10)
@@ -794,7 +816,7 @@ def plot_2d_ax (
         if method == 'filled_contour':
             csf = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
         if method == 'contour_pcolor':
-            pc = ax.pcolormesh(PLT_LON, PLT_LAT, var_plt, norm=norm, cmap=cmap, alpha=1)
+            pc = ax.pcolormesh(PLT_LON_CONTOUR, PLT_LAT_CONTOUR, var_plt, norm=norm, cmap=cmap, alpha=1)
     elif method == 'contourf':
         csf = ax.contourf(PLT_LON, PLT_LAT, var_plt, norm=norm, levels=levels, cmap=cmap, alpha=1, extend=extend)
     else:
