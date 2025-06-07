@@ -575,7 +575,7 @@ def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h',
             csf = ax.contourf(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
                              extend=extend, levels=levels, cmap=cmap, alpha=1)
         if method == 'contour_pcolor':
-            pc = ax.pcolormesh(PLT_TIM, PLT_LEV, var_plt, norm=norm, cmap=cmap, alpha=1)
+            pc = ax.pcolormesh(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
     elif method == 'contourf':
         csf = ax.contourf(PLT_TIM, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
                          extend=extend, levels=levels, cmap=cmap, alpha=1)
@@ -593,7 +593,7 @@ def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h',
     # print(point_time, point_lev)
     if point_lev and point_time:
         ax.plot(PLT_TIM[point_time_i,point_lev_i], PLT_LEV[point_time_i,point_lev_i], point_clr)
-        ax.annotate(f"({point_time:.2f}, {point_lev:.2f})", (PLT_LON[point_time_i,point_lev_i], PLT_LEV[point_time_i,point_lev_i]), xytext=(4,4), textcoords='offset points')
+        ax.annotate(f"({point_time:.2f}, {point_lev:.2f})", (PLT_TIM[point_time_i,point_lev_i], PLT_LEV[point_time_i,point_lev_i]), xytext=(4,4), textcoords='offset points')
 
     if cbar:
         if method == 'contourf' or method == 'filled_contour':
