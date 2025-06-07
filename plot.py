@@ -256,7 +256,7 @@ def plot_2d (ds, var, var_name, savefig_fn=None, savefig_resfac=1, hres=24, vres
 
 
 def plot_lonlev (ds, var, var_name, lat_i, keep_var_dim=False, savefig_fn=None, savefig_resfac=1, hres=24, vres=12, anomaly=False,
-                 lev_factor=1, adjust_plt=False, add_lat_str=False, vmin=None, vmax=None, extend='neither', method='pcolor',
+                 lev_factor=1, adjust_plt=False, add_lat_str=False, vmin=None, vmax=None, extend='neither', method='pcolor', contour_color_factor=None,
                  contour_step_level=100, contour_facecolor='grey', contour_lev_col=None, contour_zero_lev_label=False, fmt=None,
                  zoom_idx=((None,None), (None,None)), zoom_coords=((None,None), (None,None)), add_zoomstr_title=False, cbar=True, cbar_loc='right',
                  cbar_ticks_num=10, cbar_title='', cmap='jet', mask=None, point_idx=(None,None), point_coords=(None,None), point_clr='ko', noiplot=False,
