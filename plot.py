@@ -409,6 +409,116 @@ points_idx=[(None,None)], points_coords=[(None,None)], points_clr=['ko'], points
         e = cs
     return e
 
+def plot_lonlev_2d (ds, var, var_name, keep_var_dim=False, savefig_fn=None, savefig_resfac=1, hres=24, vres=12, anomaly=False,
+                 lev_factor=1, adjust_plt=False, add_lat_str=False, vmin=None, vmax=None, extend='neither', method='pcolor', contour_color_factor=None,
+                 contour_step_level=100, contour_facecolor='grey', contour_lev_col=None, contour_zero_lev_label=False, fmt=None,
+                 zoom_idx=((None,None), (None,None)), zoom_coords=((None,None), (None,None)), add_zoomstr_title=False, cbar=True, cbar_loc='right',
+                 cbar_ticks_num=10, cbar_title='', cmap='jet', mask=None, point_idx=(None,None), point_coords=(None,None), point_clr='ko', noiplot=False):
+    
+    lev0_i, levf_i = ou.get_idx_from_lev(zoom_coords[0][0], ds) if zoom_coords[0][0] else zoom_idx[0][0], ou.get_idx_from_lev(zoom_coords[0][1], ds) if zoom_coords[0][1] else zoom_idx[0][1]
+    lon0_i, lonf_i = ou.get_idx_from_lon(zoom_coords[1][0], ds) if zoom_coords[1][0] else zoom_idx[1][0], ou.get_idx_from_lon(zoom_coords[1][1], ds) if zoom_coords[1][1] else zoom_idx[1][1]
+    print(lev0_i, levf_i)
+    print(lon0_i, lonf_i)
+
+    if keep_var_dim:
+        var_plt = var*mask if mask is not None else var
+    else:
+        var_plt = var[lev0_i:levf_i,lon0_i:lonf_i]*mask[lev0_i:levf_i,lon0_i:lonf_i] if mask is not None else var[lev0_i:levf_i,lon0_i:lonf_i]
+
+    if anomaly:
+        var_plt = var_plt-np.ma.mean(var_plt)
+
+    vmin_plt, vmax_plt = np.ma.min(var_plt) if vmin is None else vmin, np.ma.max(var_plt) if vmax is None else vmax
+    vcenter_plt = vmin_plt+(vmax_plt-vmin_plt)/2
+    PLT_LON, PLT_LEV = np.meshgrid(ou.create_lonspace(ds)[lon0_i:lonf_i], lev_factor*ou.create_levspace(ds)[lev0_i:levf_i])
+    print(f"vmin, vcenter, vmax = ({vmin_plt:.3f}, {vcenter_plt:.3f}, {vmax_plt:.3f})")
+
+    if noiplot:
+        plt.ioff()
+    fig, ax = plt.subplots(1,1)
+    fig.set_size_inches(hres,vres)
+
+    if type(contour_step_level) == list:
+        levels = contour_step_level
+        ncolors = len(contour_step_level)*contour_color_factor if contour_color_factor else len(contour_step_level)
+        norm = BoundaryNorm(contour_step_level, ncolors)
+    else:
+        levels = np.arange(vmin_plt,vmax_plt+contour_step_level,contour_step_level)
+        norm = TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt)
+
+    contour_neg_ls = 'solid'
+    if method == 'pcolor':
+            pc = ax.pcolormesh(PLT_LON, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), cmap=cmap, alpha=1)
+    elif method == 'contour' or method == 'filled_contour' or method == 'contour_pcolor':
+        if fmt is None:
+            def fmt(x):
+                return f"{-x:.1f}"[:-2]
+        if contour_lev_col:
+            cs = ax.contour(PLT_LON, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels,
+                            extend=extend, negative_linestyles=contour_neg_ls, colors=contour_lev_col, alpha=1)
+        else:
+            cs = ax.contour(PLT_LON, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt), levels=levels,
+                            extend=extend, negative_linestyles=contour_neg_ls, cmap=cmap, alpha=1)
+        if contour_zero_lev_label:
+            cl = ax.clabel(cs, cs.levels, fmt=fmt, fontsize=10)
+        else:
+            cl = ax.clabel(cs, cs.levels[:-1], fmt=fmt, fontsize=10)
+        # ax.set_bad(contour_facecolor)
+        if method == 'filled_contour':
+            csf = ax.contourf(PLT_LON, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
+                             extend=extend, levels=levels, cmap=cmap, alpha=1)
+        if method == 'contour_pcolor':
+            pc = ax.pcolormesh(PLT_LON, PLT_LEV, var_plt, norm=norm, cmap=cmap, alpha=1)
+    elif method == 'contourf':
+        csf = ax.contourf(PLT_LON, PLT_LEV, var_plt, norm=TwoSlopeNorm(vmin=vmin_plt, vmax=vmax_plt, vcenter=vcenter_plt),
+                         extend=extend, levels=levels, cmap=cmap, alpha=1)
+    else:
+        print(f"Method {method} not supported")
+        return
+    ax.set_facecolor(contour_facecolor)
+    # ax.set_yscale('log')
+    point_lon_i, point_lev_i = ou.get_idx_from_lon(point_coords[0], ds) if point_coords[0] else point_idx[0], ou.get_idx_from_lev(point_coords[1], ds) if point_coords[1] else point_idx[1]
+    point_lon, point_lev = ou.get_lon_from_idx(point_idx[1], ds) if point_idx[1] else point_coords[1], ou.get_lev_from_idx(point_idx[0], ds) if point_idx[0] else point_coords[0]
+    # print(point_lon, point_lev)
+    if point_lev and point_lon:
+        ax.plot(PLT_LON[point_lon_i,point_lev_i], PLT_LEV[point_lon_i,point_lev_i], point_clr)
+        ax.annotate(f"({point_lon:.2f}, {point_lev:.2f})", (PLT_LON[point_lon_i,point_lev_i], PLT_LEV[point_lon_i,point_lev_i]), xytext=(4,4), textcoords='offset points')
+
+    if cbar:
+        if method == 'contourf' or method == 'filled_contour':
+            e = csf
+        elif method == 'pcolor' or method == 'contour_pcolor':
+            e = pc
+        divider = make_axes_locatable(ax)
+        cax = divider.append_axes(cbar_loc, size="2%", pad=0.05)
+        # cbar_ticks_num = contourf_levs+2 if method=='contourf' or method=='contour' or method=='filled_contour' else cbar_ticks_num
+        # print(cbar_ticks_num)
+        cb = fig.colorbar(e, cax=cax, ticks=tick.LinearLocator(numticks=cbar_ticks_num))
+        cb.ax.set_title(cbar_title, fontsize=8)
+    # ax.set_facecolor('gray')
+
+    if adjust_plt : ax.set_aspect('equal', adjustable='box')
+    ax.set_xlabel("lon")
+    ax.set_ylabel("lev")
+
+    if add_zoomstr_title:
+        zoom_str = f", [{lon0_i}:{lonf_i},{lev0_i}:{levf_i}]" if lev0_i or levf_i or lon0_i or lonf_i else ""
+    else:
+        zoom_str = ""
+
+    if savefig_fn:
+        plt.savefig(savefig_fn, dpi=savefig_resfac*hres*vres, bbox_inches='tight')
+        plt.close()
+    else:
+        plt.show()
+    if method == 'contourf' or method == 'filled_contour':
+        e = csf
+    elif method == 'pcolor' or method == 'contour_pcolor':
+        e = pc
+    else:
+        e = cs
+    return e
+
 
 def plot_hoevmoller (ds, var, start_date, end_date, var_name, restart_freq='6h', keep_var_dim=False, method='pcolor', fmt=None,
                      contour_step_level=100, contour_facecolor='grey', contour_lev_col=None, contour_zero_lev_label=False,
